@@ -1,0 +1,73 @@
+{
+    "LastName": "Draper",
+    "FirstName": "Jack",
+    "MidInitial": null,
+    "BirthCity": "Sutton, England",
+    "Residence": null,
+    "Coach": "James Trotman",
+    "Pronunciation": null,
+    "BirthDate": "2001-12-22T00:00:00",
+    "Age": 23,
+    "NatlId": "GBR",
+    "Nationality": "Great Britain",
+    "HeightIn": 76,
+    "HeightFt": "6'4\"",
+    "HeightCm": 193,
+    "WeightLb": 187,
+    "WeightKg": 85,
+    "PlayHand": {
+        "Id": "L",
+        "Description": "Left-Handed"
+    },
+    "BackHand": {
+        "Id": "2",
+        "Description": "Two-Handed"
+    },
+    "ProYear": 2018,
+    "Active": {
+        "Id": "A",
+        "Description": "Active"
+    },
+    "DblSpecialist": false,
+    "SglRank": 5,
+    "SglHiRank": 5,
+    "SglRankMove": 1,
+    "SglRankTie": false,
+    "DblRank": 206,
+    "DblHiRank": 203,
+    "DblRankMove": -3,
+    "DblRankTie": false,
+    "ScRelativeUrlPlayerProfile": "/en/players/jack-draper/d0co/overview",
+    "ScRelativeUrlPlayerCountryFlag": "/en/~/media/images/flags/gbr.svg",
+    "GladiatorImageUrl": null,
+    "SglCareerWon": 98,
+    "SglCareerLost": 56,
+    "SglYtdWon": 19,
+    "SglYtdLost": 5,
+    "SglCareerTitles": 3,
+    "SglYtdTitles": 1,
+    "SglYtdPrizeFormatted": "$1,862,546",
+    "CareerPrizeFormatted": "$6,788,612",
+    "DblCareerWon": 6,
+    "DblCareerLost": 4,
+    "DblYtdWon": 2,
+    "DblYtdLost": 1,
+    "DblCareerTitles": 0,
+    "DblYtdTitles": 0,
+    "DblYtdPrizeFormatted": "$25,290",
+    "IsCarbonTrackerEnabled": false,
+    "SocialLinks": [
+        {
+            "SocialId": "IG",
+            "SocialLink": "https://www.instagram.com/jackdraper/"
+        },
+        {
+            "SocialId": "TW",
+            "SocialLink": "https://twitter.com/jackdraper0"
+        }
+    ],
+    "CacheTags": null,
+    "TopCourtLink": "",
+    "SglHiRankDate": "2025-05-05T00:00:00",
+    "DblHiRankDate": "2025-04-21T00:00:00"
+}

@@ -174,7 +174,20 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
         backgroundColor: Colors.black,
         appBar: AppBar(
           backgroundColor: Colors.black,
-          title: const Text('Match Details'),
+          title: const Text(
+            'Match Detial',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          leading: IconButton(
+            icon:
+                const Icon(Icons.arrow_back_ios, color: Colors.white, size: 22),
+            onPressed: () => Navigator.of(context).pop(),
+            tooltip: '',
+          ),
           elevation: 0,
         ),
         body: const Center(
@@ -255,6 +268,9 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
     // 获取比赛统计数据
     final player1Stats = player1Sets.isNotEmpty ? player1Sets[0]['Stats'] : {};
     final player2Stats = player2Sets.isNotEmpty ? player2Sets[0]['Stats'] : {};
+
+    final player1SetsStats = player1Sets.isNotEmpty ? player1Sets : [];
+    final player2SetsStats = player2Sets.isNotEmpty ? player2Sets : [];
     // 比分数据
     // 获取年度统计数据
     final player1YearStats = playerTeam['YearToDateStats'] ?? {};
@@ -308,15 +324,15 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
 
             // 比分区域
             _buildScoreArea(
-                player1Id,
-                player2Id,
+                player1Id ?? '',
+                player2Id ?? '',
                 _formatPlayerName('$player1FirstName $player1LastName'),
-                player1Country!,
-                player1ImageUrl!,
+                player1Country ?? '',
+                player1ImageUrl ?? '', // 添加空值检查
                 player1FlagUrl,
                 _formatPlayerName('$player2FirstName $player2LastName'),
-                player2Country!,
-                player2ImageUrl!,
+                player2Country ?? '',
+                player2ImageUrl ?? '', // 添加空值检查
                 player2FlagUrl,
                 setScores,
                 player1TiebreakList,
@@ -326,7 +342,8 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
             // 统计数据区域
 
             Expanded(
-              child: _buildStatsArea(player1Stats, player2Stats),
+              child: _buildStatsArea(player1Stats, player2Stats,
+                  player1SetsStats, player2SetsStats),
             ),
 
             // 底部导航栏
@@ -423,8 +440,12 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
       player1TiebreakList,
       player2TiebreakList) {
     // 使用传入的URL或者默认URL
-    final p1ImageUrl = player1ImageUrl;
-    final p2ImageUrl = player2ImageUrl;
+    final p1ImageUrl = player1ImageUrl.isNotEmpty
+        ? player1ImageUrl
+        : 'https://atptour.com/-/media/alias/player-headshot/default-player-headshot.png';
+    final p2ImageUrl = player2ImageUrl.isNotEmpty
+        ? player2ImageUrl
+        : 'https://atptour.com/-/media/alias/player-headshot/default-player-headshot.png';
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 0, vertical: 0),
       child: ClipRRect(
@@ -868,7 +889,8 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
   }
 
   // 构建统计数据区域
-  Widget _buildStatsArea(Map player1Stats, Map player2Stats) {
+  Widget _buildStatsArea(Map player1Stats, Map player2Stats,
+      List player1SetsStats, List player2SetsStats) {
     // STATS统计数据
     final serviceStats1 = player1Stats['ServiceStats'] ?? {};
     final serviceStats2 = player2Stats['ServiceStats'] ?? {};
@@ -907,7 +929,9 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
           Padding(
             padding: const EdgeInsets.only(top: 16, bottom: 8, left: 8),
             child: Text(
-              _currentStatsPage == 0 ? 'Match Stats' : 'YTD Stats',
+              _currentStatsPage == 0
+                  ? 'Match Stats'
+                  : 'Set $_currentStatsPage Stats',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -927,6 +951,40 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                 // 当前比赛统计
                 ListView(padding: const EdgeInsets.all(16), children: [
                   // 发球统计
+                  // _buildCenteredStatBar(
+                  //   'Serve Rating',
+                  //   serviceStats1['ServeRating']['Number'] != null
+                  //       ? int.parse(
+                  //           serviceStats1['ServeRating']['Number'].toString())
+                  //       : 0,
+                  //   1,
+                  //   serviceStats1['ServeRating']['Number'] != null
+                  //       ? int.parse(
+                  //           serviceStats1['ServeRating']['Number'].toString())
+                  //       : 0,
+                  //   1,
+                  // ),
+                  // const SizedBox(height: 16),
+                  _buildCenteredStatBar(
+                    'ACE',
+                    serviceStats1['Aces']['Number'] ?? 0,
+                    serviceStats1['Aces']['Number'] +
+                        serviceStats2['Aces']['Number'],
+                    serviceStats2['Aces']['Number'] ?? 0,
+                    serviceStats1['Aces']['Number'] +
+                        serviceStats2['Aces']['Number'],
+                  ),
+                  const SizedBox(height: 16),
+                  _buildCenteredStatBar(
+                    'Double Faults',
+                    serviceStats1['DoubleFaults']['Number'] ?? 0,
+                    serviceStats1['DoubleFaults']['Number'] +
+                        serviceStats2['DoubleFaults']['Number'],
+                    serviceStats2['DoubleFaults']['Number'] ?? 0,
+                    serviceStats1['DoubleFaults']['Number'] +
+                        serviceStats2['DoubleFaults']['Number'],
+                  ),
+                  const SizedBox(height: 16),
                   _buildCenteredStatBar(
                     '1st Serve %',
                     serviceStats1['FirstServe']['Dividend'] != null
@@ -957,14 +1015,6 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                   const SizedBox(height: 16),
 
                   _buildCenteredStatBar(
-                    'ACE',
-                    serviceStats1['Aces']['Number'] ?? 0,
-                    1,
-                    serviceStats2['Aces']['Number'] ?? 0,
-                    1,
-                  ),
-                  const SizedBox(height: 16),
-                  _buildCenteredStatBar(
                     '2nd Serve Points Won',
                     serviceStats1['SecondServePointsWon']['Dividend'] ?? 0,
                     serviceStats1['SecondServePointsWon']['Divisor'] ?? 1,
@@ -980,19 +1030,10 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                     serviceStats2['BreakPointsSaved']['Divisor'] ?? 1,
                   ),
                   const SizedBox(height: 16),
-                  _buildCenteredStatBar(
-                    'Double Faults',
-                    serviceStats1['DoubleFaults']['Number'] ?? 0,
-                    1,
-                    serviceStats2['DoubleFaults']['Number'] ?? 0,
-                    1,
-                  ),
-
-                  const SizedBox(height: 16),
 
                   // 接发球统计
                   _buildCenteredStatBar(
-                    'Return Points Won',
+                    '1st Serve Return Points Won',
                     returnStats1['FirstServeReturnPointsWon']['Dividend'] ?? 0,
                     returnStats1['FirstServeReturnPointsWon']['Divisor'] ?? 1,
                     returnStats2['FirstServeReturnPointsWon']['Dividend'] ?? 0,
@@ -1001,7 +1042,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                   const SizedBox(height: 16),
                   // 接发球统计
                   _buildCenteredStatBar(
-                    'Return Points Won',
+                    '2nd Serve Return Points Won',
                     returnStats1['SecondServeReturnPointsWon']['Dividend'] ?? 0,
                     returnStats1['SecondServeReturnPointsWon']['Divisor'] ?? 1,
                     returnStats2['SecondServeReturnPointsWon']['Dividend'] ?? 0,
@@ -1017,16 +1058,16 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                   ),
                   const SizedBox(height: 16),
                   _buildCenteredStatBar(
-                    'Break Points Converted',
-                    returnStats1['BreakPointsConverted']['Dividend'] ?? 0,
-                    returnStats1['BreakPointsConverted']['Divisor'] ?? 1,
-                    returnStats2['BreakPointsConverted']['Dividend'] ?? 0,
-                    returnStats2['BreakPointsConverted']['Divisor'] ?? 1,
+                    'Return Games Played',
+                    returnStats1['ReturnGamesPlayed']['Number'] ?? 0,
+                    1,
+                    returnStats2['ReturnGamesPlayed']['Number'] ?? 0,
+                    1,
                   ),
                   const SizedBox(height: 16),
                   // 总体统计
                   _buildCenteredStatBar(
-                    'Total Points Won',
+                    'Total Service Points Won',
                     pointStats1['TotalServicePointsWon']['Dividend'] ?? 0,
                     pointStats1['TotalServicePointsWon']['Divisor'] ?? 1,
                     pointStats2['TotalServicePointsWon']['Dividend'] ?? 0,
@@ -1052,160 +1093,425 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                   ),
                 ]),
 
-                // 年度统计
-                ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
+                for (int i = 1; i < player1SetsStats.length; i++)
+                  ListView(padding: const EdgeInsets.all(16), children: [
+                    // _buildCenteredStatBar(
+                    //   'Serve Rating',
+                    //   player1SetsStats[i]['Stats']['ServiceStats']
+                    //               ['ServeRating']['Number'] !=
+                    //           null
+                    //       ? int.parse(player1SetsStats[i]['Stats']
+                    //               ['ServiceStats']['ServeRating']['Number']
+                    //           .toString())
+                    //       : 0,
+                    //   1,
+                    //   player2SetsStats[i]['Stats']['ServiceStats']
+                    //               ['ServeRating']['Number'] !=
+                    //           null
+                    //       ? int.parse(player2SetsStats[i]['Stats']
+                    //               ['ServiceStats']['ServeRating']['Number']
+                    //           .toString())
+                    //       : 0,
+                    //   1,
+                    // ),
+                    // const SizedBox(height: 16),
+                    _buildCenteredStatBar(
+                      'ACE',
+                      player1SetsStats[i]['Stats']['ServiceStats']['Aces']
+                              ['Number'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['ServiceStats']['Aces']
+                              ['Number'] +
+                          player2SetsStats[i]['Stats']['ServiceStats']['Aces']
+                              ['Number'],
+                      player2SetsStats[i]['Stats']['ServiceStats']['Aces']
+                              ['Number'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['ServiceStats']['Aces']
+                              ['Number'] +
+                          player2SetsStats[i]['Stats']['ServiceStats']['Aces']
+                              ['Number'],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildCenteredStatBar(
+                      'Double Faults',
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['DoubleFaults']['Number'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['DoubleFaults']['Number'] +
+                          player2SetsStats[i]['Stats']['ServiceStats']
+                              ['DoubleFaults']['Number'],
+                      player2SetsStats[i]['Stats']['ServiceStats']
+                              ['DoubleFaults']['Number'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['DoubleFaults']['Number'] +
+                          player2SetsStats[i]['Stats']['ServiceStats']
+                              ['DoubleFaults']['Number'],
+                    ),
+
+                    const SizedBox(height: 16),
+                    // 发球统计
                     _buildCenteredStatBar(
                       '1st Serve %',
-                      serviceYTDStats1['FirstServe']['Percent'] != null
-                          ? int.parse(serviceYTDStats1['FirstServe']['Percent']
-                              .toString())
-                          : 0,
-                      100,
-                      serviceYTDStats2['FirstServe']['Percent'] != null
-                          ? int.parse(serviceYTDStats2['FirstServe']['Percent']
-                              .toString())
-                          : 0,
-                      100,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildCenteredStatBar(
-                      'Service Games Won %',
-                      serviceYTDStats1['ServiceGamesWon']['Percent'] != null
-                          ? int.parse(serviceYTDStats1['ServiceGamesWon']
-                                  ['Percent']
-                              .toString())
-                          : 0,
-                      100,
-                      serviceYTDStats2['ServiceGamesWon']['Percent'] != null
-                          ? int.parse(serviceYTDStats2['ServiceGamesWon']
-                                  ['Percent']
-                              .toString())
-                          : 0,
-                      100,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildCenteredStatBar(
-                      'Total Service Points Won %',
-                      serviceYTDStats1['TotalServicePointsWon']['Percent'] !=
+                      player1SetsStats[i]['Stats']['ServiceStats']['FirstServe']
+                                  ['Dividend'] !=
                               null
-                          ? int.parse(serviceYTDStats1['TotalServicePointsWon']
-                                  ['Percent']
+                          ? int.parse(player1SetsStats[i]['Stats']
+                                  ['ServiceStats']['FirstServe']['Dividend']
                               .toString())
                           : 0,
-                      100,
-                      serviceYTDStats2['TotalServicePointsWon']['Percent'] !=
+                      player1SetsStats[i]['Stats']['ServiceStats']['FirstServe']
+                                  ['Divisor'] !=
                               null
-                          ? int.parse(serviceYTDStats2['TotalServicePointsWon']
-                                  ['Percent']
+                          ? int.parse(player1SetsStats[i]['Stats']
+                                  ['ServiceStats']['FirstServe']['Divisor']
+                              .toString())
+                          : 1,
+                      player2SetsStats[i]['Stats']['ServiceStats']['FirstServe']
+                                  ['Dividend'] !=
+                              null
+                          ? int.parse(player2SetsStats[i]['Stats']
+                                  ['ServiceStats']['FirstServe']['Dividend']
                               .toString())
                           : 0,
-                      100,
+                      player2SetsStats[i]['Stats']['ServiceStats']['FirstServe']
+                                  ['Divisor'] !=
+                              null
+                          ? int.parse(player2SetsStats[i]['Stats']
+                                  ['ServiceStats']['FirstServe']['Divisor']
+                              .toString())
+                          : 1,
                     ),
                     const SizedBox(height: 16),
-
                     _buildCenteredStatBar(
                       '1st Serve Points Won',
-                      serviceYTDStats1['FirstServePointsWon']['Percent'] ?? 0,
-                      100,
-                      serviceYTDStats2['FirstServePointsWon']['Percent'] ?? 0,
-                      100,
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['FirstServePointsWon']['Dividend'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['FirstServePointsWon']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['ServiceStats']
+                              ['FirstServePointsWon']['Dividend'] ??
+                          0,
+                      player2SetsStats[i]['Stats']['ServiceStats']
+                              ['FirstServePointsWon']['Divisor'] ??
+                          1,
                     ),
                     const SizedBox(height: 16),
 
                     _buildCenteredStatBar(
                       '2nd Serve Points Won',
-                      serviceYTDStats1['SecondServePointsWon']['Percent'] ?? 0,
-                      100,
-                      serviceYTDStats2['SecondServePointsWon']['Percent'] ?? 0,
-                      100,
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['SecondServePointsWon']['Dividend'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['SecondServePointsWon']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['ServiceStats']
+                              ['SecondServePointsWon']['Dividend'] ??
+                          0,
+                      player2SetsStats[i]['Stats']['ServiceStats']
+                              ['SecondServePointsWon']['Divisor'] ??
+                          1,
                     ),
                     const SizedBox(height: 16),
                     _buildCenteredStatBar(
                       'Break Points Saved',
-                      serviceYTDStats1['BreakPointsSaved']['Percent'] ?? 0,
-                      100,
-                      serviceYTDStats2['BreakPointsSaved']['Percent'] ?? 0,
-                      100,
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    _buildCenteredStatBar(
-                      'ACE',
-                      serviceYTDStats1['Aces']['Number'] ?? 0,
-                      1,
-                      serviceYTDStats2['Aces']['Number'] ?? 0,
-                      1,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildCenteredStatBar(
-                      'Double Faults',
-                      serviceYTDStats1['DoubleFaults']['Number'] ?? 0,
-                      1,
-                      serviceYTDStats2['DoubleFaults']['Number'] ?? 0,
-                      1,
+                      player1SetsStats[i]['Stats']['ServiceStats']
+                              ['BreakPointsSaved']['Dividend'] ??
+                          0,
+                      (player1SetsStats[i]['Stats']['ServiceStats']
+                                      ['BreakPointsSaved']['Divisor'] ??
+                                  0) ==
+                              0
+                          ? 1
+                          : player1SetsStats[i]['Stats']['ServiceStats']
+                                  ['BreakPointsSaved']['Divisor'] ??
+                              1,
+                      player2SetsStats[i]['Stats']['ServiceStats']
+                              ['BreakPointsSaved']['Dividend'] ??
+                          0,
+                      (player2SetsStats[i]['Stats']['ServiceStats']
+                                      ['BreakPointsSaved']['Divisor'] ??
+                                  0) ==
+                              0
+                          ? 1
+                          : player2SetsStats[i]['Stats']['ServiceStats']
+                                  ['BreakPointsSaved']['Divisor'] ??
+                              1,
                     ),
                     const SizedBox(height: 16),
 
                     // 接发球统计
                     _buildCenteredStatBar(
-                      'Return Points Won',
-                      returnYTDStats1['FirstServeReturnPointsWon']['Percent'] ??
+                      '1st Serve Return Points Won',
+                      player1SetsStats[i]['Stats']['ReturnStats']
+                              ['FirstServeReturnPointsWon']['Dividend'] ??
                           0,
-                      100,
-                      returnYTDStats2['FirstServeReturnPointsWon']['Percent'] ??
+                      player1SetsStats[i]['Stats']['ReturnStats']
+                              ['FirstServeReturnPointsWon']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['ReturnStats']
+                              ['FirstServeReturnPointsWon']['Dividend'] ??
                           0,
-                      100,
+                      player2SetsStats[i]['Stats']['ReturnStats']
+                              ['FirstServeReturnPointsWon']['Divisor'] ??
+                          1,
                     ),
                     const SizedBox(height: 16),
                     // 接发球统计
                     _buildCenteredStatBar(
-                      'Return Points Won',
-                      returnYTDStats1['SecondServeReturnPointsWon']
-                              ['Percent'] ??
+                      '2nd Serve Return Points Won',
+                      player1SetsStats[i]['Stats']['ReturnStats']
+                              ['SecondServeReturnPointsWon']['Dividend'] ??
                           0,
-                      100,
-                      returnYTDStats2['SecondServeReturnPointsWon']
-                              ['Percent'] ??
+                      player1SetsStats[i]['Stats']['ReturnStats']
+                              ['SecondServeReturnPointsWon']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['ReturnStats']
+                              ['SecondServeReturnPointsWon']['Dividend'] ??
                           0,
-                      100,
+                      player2SetsStats[i]['Stats']['ReturnStats']
+                              ['SecondServeReturnPointsWon']['Divisor'] ??
+                          1,
                     ),
                     const SizedBox(height: 16),
                     _buildCenteredStatBar(
                       'Break Points Converted',
-                      returnYTDStats1['BreakPointsConverted']['Percent'] ?? 0,
-                      100,
-                      returnYTDStats2['BreakPointsConverted']['Percent'] ?? 0,
-                      100,
+                      player1SetsStats[i]['Stats']['ReturnStats']
+                              ['BreakPointsConverted']['Dividend'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['ReturnStats']
+                              ['BreakPointsConverted']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['ReturnStats']
+                              ['BreakPointsConverted']['Dividend'] ??
+                          0,
+                      player2SetsStats[i]['Stats']['ReturnStats']
+                              ['BreakPointsConverted']['Divisor'] ??
+                          1,
                     ),
                     const SizedBox(height: 16),
                     _buildCenteredStatBar(
-                      'Break Points Converted',
-                      returnYTDStats1['ReturnPointsWon']['Percent'] ?? 0,
-                      100,
-                      returnYTDStats2['ReturnPointsWon']['Percent'] ?? 0,
-                      100,
+                      'Return Games Played',
+                      player1SetsStats[i]['Stats']['ReturnStats']
+                              ['ReturnGamesPlayed']['Number'] ??
+                          0,
+                      1,
+                      player2SetsStats[i]['Stats']['ReturnStats']
+                              ['ReturnGamesPlayed']['Number'] ??
+                          0,
+                      1,
                     ),
                     const SizedBox(height: 16),
+                    // 总体统计
                     _buildCenteredStatBar(
-                      'Return Games Won',
-                      returnYTDStats1['ReturnGamesWon']['Percent'] ?? 0,
-                      100,
-                      returnYTDStats2['ReturnGamesWon']['Percent'] ?? 0,
-                      100,
+                      'Total Points Won',
+                      player1SetsStats[i]['Stats']['PointStats']
+                              ['TotalServicePointsWon']['Dividend'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['PointStats']
+                              ['TotalServicePointsWon']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['PointStats']
+                              ['TotalServicePointsWon']['Dividend'] ??
+                          0,
+                      player2SetsStats[i]['Stats']['PointStats']
+                              ['TotalServicePointsWon']['Divisor'] ??
+                          1,
                     ),
                     const SizedBox(height: 16),
+                    // 总体统计
                     _buildCenteredStatBar(
-                      'Return Games Won',
-                      returnYTDStats1['TotalPointsWon']['Percent'] ?? 0,
-                      100,
-                      returnYTDStats2['TotalPointsWon']['Percent'] ?? 0,
-                      100,
+                      'Total Return Points Won',
+                      player1SetsStats[i]['Stats']['PointStats']
+                              ['TotalReturnPointsWon']['Dividend'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['PointStats']
+                              ['TotalReturnPointsWon']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['PointStats']
+                              ['TotalReturnPointsWon']['Dividend'] ??
+                          0,
+                      player2SetsStats[i]['Stats']['PointStats']
+                              ['TotalReturnPointsWon']['Divisor'] ??
+                          1,
                     ),
-                  ],
-                ),
+                    // 总体统计
+                    const SizedBox(height: 16),
+                    _buildCenteredStatBar(
+                      'Total Points Won',
+                      player1SetsStats[i]['Stats']['PointStats']
+                              ['TotalPointsWon']['Dividend'] ??
+                          0,
+                      player1SetsStats[i]['Stats']['PointStats']
+                              ['TotalPointsWon']['Divisor'] ??
+                          1,
+                      player2SetsStats[i]['Stats']['PointStats']
+                              ['TotalPointsWon']['Dividend'] ??
+                          0,
+                      player2SetsStats[i]['Stats']['PointStats']
+                              ['TotalPointsWon']['Divisor'] ??
+                          1,
+                    ),
+                  ]),
+                // 年度统计
+                //  ListView(
+                //   padding: const EdgeInsets.all(16),
+                //   children: [
+                //     _buildCenteredStatBar(
+                //       '1st Serve %',
+                //       serviceYTDStats1['FirstServe']['Percent'] != null
+                //           ? int.parse(serviceYTDStats1['FirstServe']['Percent']
+                //               .toString())
+                //           : 0,
+                //       100,
+                //       serviceYTDStats2['FirstServe']['Percent'] != null
+                //           ? int.parse(serviceYTDStats2['FirstServe']['Percent']
+                //               .toString())
+                //           : 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Service Games Won %',
+                //       serviceYTDStats1['ServiceGamesWon']['Percent'] != null
+                //           ? int.parse(serviceYTDStats1['ServiceGamesWon']
+                //                   ['Percent']
+                //               .toString())
+                //           : 0,
+                //       100,
+                //       serviceYTDStats2['ServiceGamesWon']['Percent'] != null
+                //           ? int.parse(serviceYTDStats2['ServiceGamesWon']
+                //                   ['Percent']
+                //               .toString())
+                //           : 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Total Service Points Won %',
+                //       serviceYTDStats1['TotalServicePointsWon']['Percent'] !=
+                //               null
+                //           ? int.parse(serviceYTDStats1['TotalServicePointsWon']
+                //                   ['Percent']
+                //               .toString())
+                //           : 0,
+                //       100,
+                //       serviceYTDStats2['TotalServicePointsWon']['Percent'] !=
+                //               null
+                //           ? int.parse(serviceYTDStats2['TotalServicePointsWon']
+                //                   ['Percent']
+                //               .toString())
+                //           : 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+
+                //     _buildCenteredStatBar(
+                //       '1st Serve Points Won',
+                //       serviceYTDStats1['FirstServePointsWon']['Percent'] ?? 0,
+                //       100,
+                //       serviceYTDStats2['FirstServePointsWon']['Percent'] ?? 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+
+                //     _buildCenteredStatBar(
+                //       '2nd Serve Points Won',
+                //       serviceYTDStats1['SecondServePointsWon']['Percent'] ?? 0,
+                //       100,
+                //       serviceYTDStats2['SecondServePointsWon']['Percent'] ?? 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Break Points Saved',
+                //       serviceYTDStats1['BreakPointsSaved']['Percent'] ?? 0,
+                //       100,
+                //       serviceYTDStats2['BreakPointsSaved']['Percent'] ?? 0,
+                //       100,
+                //     ),
+
+                //     const SizedBox(height: 16),
+
+                //     _buildCenteredStatBar(
+                //       'ACE',
+                //       serviceYTDStats1['Aces']['Number'] ?? 0,
+                //       1,
+                //       serviceYTDStats2['Aces']['Number'] ?? 0,
+                //       1,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Double Faults',
+                //       serviceYTDStats1['DoubleFaults']['Number'] ?? 0,
+                //       1,
+                //       serviceYTDStats2['DoubleFaults']['Number'] ?? 0,
+                //       1,
+                //     ),
+                //     const SizedBox(height: 16),
+
+                //     // 接发球统计
+                //     _buildCenteredStatBar(
+                //       'Return Points Won',
+                //       returnYTDStats1['FirstServeReturnPointsWon']['Percent'] ??
+                //           0,
+                //       100,
+                //       returnYTDStats2['FirstServeReturnPointsWon']['Percent'] ??
+                //           0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     // 接发球统计
+                //     _buildCenteredStatBar(
+                //       'Return Points Won',
+                //       returnYTDStats1['SecondServeReturnPointsWon']
+                //               ['Percent'] ??
+                //           0,
+                //       100,
+                //       returnYTDStats2['SecondServeReturnPointsWon']
+                //               ['Percent'] ??
+                //           0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Break Points Converted',
+                //       returnYTDStats1['BreakPointsConverted']['Percent'] ?? 0,
+                //       100,
+                //       returnYTDStats2['BreakPointsConverted']['Percent'] ?? 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Break Points Converted',
+                //       returnYTDStats1['ReturnPointsWon']['Percent'] ?? 0,
+                //       100,
+                //       returnYTDStats2['ReturnPointsWon']['Percent'] ?? 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Return Games Won',
+                //       returnYTDStats1['ReturnGamesWon']['Percent'] ?? 0,
+                //       100,
+                //       returnYTDStats2['ReturnGamesWon']['Percent'] ?? 0,
+                //       100,
+                //     ),
+                //     const SizedBox(height: 16),
+                //     _buildCenteredStatBar(
+                //       'Return Games Won',
+                //       returnYTDStats1['TotalPointsWon']['Percent'] ?? 0,
+                //       100,
+                //       returnYTDStats2['TotalPointsWon']['Percent'] ?? 0,
+                //       100,
+                //     ),
+                //   ],
+                // ),
               ],
             ),
           ),
@@ -1216,27 +1522,18 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _currentStatsPage == 0
-                        ? const Color(0xFF94E831)
-                        : Colors.grey.withOpacity(0.5),
-                    shape: BoxShape.circle,
+                for (int i = 0; i < player1SetsStats.length; i++)
+                  Container(
+                    width: 8,
+                    height: 8,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    decoration: BoxDecoration(
+                      color: _currentStatsPage == i
+                          ? const Color(0xFF94E831)
+                          : Colors.grey.withOpacity(0.5),
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: _currentStatsPage == 1
-                        ? const Color(0xFF94E831)
-                        : Colors.grey.withOpacity(0.5),
-                    shape: BoxShape.circle,
-                  ),
-                ),
               ],
             ),
           ),
@@ -1258,20 +1555,21 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
 
     // 计算进度条宽度
     // 计算总百分比，用于确定每边的比例
-    final totalPercent = player1Percent + player2Percent;
-    final player1Ratio = totalPercent > 0 ? player1Percent / totalPercent : 0.5;
-    final player2Ratio = totalPercent > 0 ? player2Percent / totalPercent : 0.5;
 
     final totalWidth =
-        MediaQuery.of(context).size.width * 0.6 - 16; // 减去左右padding和边距
-    final totalValue = player1Value + player2Value;
+        MediaQuery.of(context).size.width * 0.65 - 16; // 减去左右padding和边距
     final player1Width =
         totalWidth / 2 * (player1Total > 0 ? (player1Value / player1Total) : 0);
     final player2Width =
         totalWidth / 2 * (player1Total > 0 ? (player2Value / player2Total) : 0);
+    debugPrint(
+        '$title $player1Width \ $player1Total \ $player2Width \ $player2Total');
     final bool isYtdData = _currentStatsPage == 1;
-    final bool isCountData =
-        title.contains('ACE') || title.contains('Double'); // 当分母为1时，通常是计数型数据
+    final bool isCountData = title.contains('ACE') ||
+        title.contains('Double') ||
+        title.contains('Serve Rating') ||
+        title.contains('Return Games Played'); // 当分母为1时，通常是计数型数据
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -1293,7 +1591,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
           children: [
             // 球员1百分比
             SizedBox(
-              width: 44,
+              width: 48,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1305,14 +1603,13 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (!isYtdData && !isCountData)
-                    Text(
-                      '(${player1Value}/${player1Total})',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 10,
-                      ),
+                  Text(
+                    '(${player1Value}/${player1Total})',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 10,
                     ),
+                  ),
                 ],
               ),
             ),
@@ -1340,7 +1637,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                         ),
                       ),
                       child: Container(
-                        width: player1Width,
+                        width: player1Width == 0.0 ? 1 : player1Width,
                         height: 12,
                         decoration: const BoxDecoration(
                           color: Color(0xFF94E831),
@@ -1368,7 +1665,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                         ),
                       ),
                       child: Container(
-                        width: player2Width,
+                        width: player2Width == 0.0 ? 0.1 : player2Width,
                         height: 12,
                         decoration: const BoxDecoration(
                           color: Color(0xFFAA00FF),
@@ -1388,7 +1685,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
 
             // 球员2百分比
             SizedBox(
-              width: 44,
+              width: 48,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -1401,15 +1698,14 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  if (!isYtdData && !isCountData)
-                    Text(
-                      '($player2Value/$player2Total)',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 10,
-                      ),
+                  Text(
+                    '($player2Value/$player2Total)',
+                    textAlign: TextAlign.right,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 10,
                     ),
+                  ),
                 ],
               ),
             ),

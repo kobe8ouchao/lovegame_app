@@ -159,6 +159,24 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        title: const Text(
+          'Players Overview',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        elevation: 0,
+        centerTitle: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          tooltip: '', // 设置为空字符串以禁用长按提示
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
       body: SafeArea(
         bottom: true, // 确保底部有安全区域
         child: _isLoading
@@ -179,7 +197,6 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
   Widget _buildPlayerDetails() {
     return CustomScrollView(
       slivers: [
-        _buildAppBar(),
         SliverToBoxAdapter(
           child: Column(
             children: [
@@ -198,6 +215,8 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
       expandedHeight: 0,
       floating: false,
       pinned: true,
+      backgroundColor: Colors.black,
+      elevation: 0,
       title: const Text(
         'Players Overview',
         style: TextStyle(

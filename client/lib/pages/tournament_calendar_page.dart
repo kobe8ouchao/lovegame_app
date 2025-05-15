@@ -10,6 +10,7 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../models/tournament_model.dart';
 import '../services/tournament_service.dart';
 import '../services/api_service.dart';
+import 'package:transparent_image/transparent_image.dart';
 
 class TournamentCalendarPage extends StatefulWidget {
   const TournamentCalendarPage({super.key});
@@ -29,6 +30,9 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
   bool _isLoading = true;
   bool _showCalendar =
       false; // Control whether to display calendar or list view
+
+  // 添加变量控制显示ATP还是WTA数据
+  String _currentTourType = 'ATP'; // 默认显示ATP数据
 
   // Add year and month lists
   List<int> _years = [];
@@ -89,25 +93,6 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
   }
 
   // Attempt to fetch data from backend API
-  Future<Map<String, dynamic>?> _fetchFromBackendAPI() async {
-    try {
-      // Try to get data from our own backend service
-      // Note: Please replace with your actual backend API URL
-      final backendResponse = await http
-          .get(
-            Uri.parse('https://your-backend-api.com/tournaments'),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      if (backendResponse.statusCode == 200) {
-        print('Successfully retrieved data from backend API');
-        return json.decode(backendResponse.body);
-      }
-    } catch (e) {
-      print('Failed to retrieve data from backend API: $e');
-    }
-    return null;
-  }
 
   // Keep original method unchanged
   void _updateCalendarData() {
@@ -120,141 +105,235 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     _daysInMonth = lastDayOfMonth.day;
   }
 
-  // Load tournament data from ATP official website
+  // Load tournament data from ATP or WTA sources
   Future<void> _loadTournamentsFromAsset() async {
-    setState(() {
-      _isLoading = true;
-    });
-
     try {
-      Map<String, dynamic> data;
-
-      // Try to get the latest data from API
-      try {
-        // Note: In a production environment, you should use your own backend service to proxy requests to avoid CORS issues
-        // Here we try a different URL format, or consider using a proxy service
-        print('Starting ATP tournament data request...');
-        data = await _loadFromAsset();
-      } catch (e) {
-        print('Failed to retrieve data from API: $e');
-        print('Error type: ${e.runtimeType}');
-
-        // Due to potential CORS issues with API request, use built-in resource file
-        data = await _loadFromAsset();
-      }
-
-      // Keep data processing logic unchanged
       setState(() {
-        _tournamentDates = data['TournamentDates'] ?? [];
-        _tournaments = [];
+        _isLoading = true;
+      });
 
-        final currentMonthData = _tournamentDates
-            .where((item) =>
-                item['month'] == _currentMonth.month &&
-                (item['year'] == _currentMonth.year || item['year'] == null))
-            .toList();
+      // 根据当前选择的类型加载不同的数据
+      final String assetPath = _currentTourType == 'ATP'
+          ? 'assets/2025_atp_tournament.json'
+          : 'assets/2025_wta_tournament.json';
 
-        // Process tournaments in current month
-        for (var monthData in currentMonthData) {
-          if (monthData.containsKey('Tournaments')) {
-            final List<dynamic> tournamentsInMonth = monthData['Tournaments'];
+      final String jsonString = await rootBundle.loadString(assetPath);
+      final Map<String, dynamic> data = json.decode(jsonString);
 
-            for (var tournament in tournamentsInMonth) {
-              Map<String, dynamic> processedTournament =
-                  Map<String, dynamic>.from(tournament);
+      if (_currentTourType == 'ATP') {
+        // 处理ATP数据格式
+        setState(() {
+          _tournamentDates = data['TournamentDates'] ?? [];
+          _tournaments = [];
 
-              // 解析开始日期
-              if (tournament['startDate'] != null) {
-                try {
-                  final DateTime startDate =
-                      DateTime.parse(tournament['startDate']);
+          final currentMonthData = _tournamentDates
+              .where((item) =>
+                  item['month'] == _currentMonth.month &&
+                  (item['year'] == _currentMonth.year || item['year'] == null))
+              .toList();
 
-                  // Modified: No longer restrict to only add when start date is in current month
-                  // If start date is in current month
-                  if (startDate.month == _currentMonth.month &&
-                      startDate.year == _currentMonth.year) {
-                    processedTournament['startDay'] = startDate.day;
-                    processedTournament['startDateFull'] = startDate;
-                  } else if (startDate.month < _currentMonth.month ||
-                      (startDate.year < _currentMonth.year &&
-                          startDate.month > _currentMonth.month)) {
-                    // If start date is in previous month, set to 1st day of current month
-                    processedTournament['startDay'] = 1;
-                    processedTournament['startDateFull'] =
-                        DateTime(_currentMonth.year, _currentMonth.month, 1);
-                    processedTournament['isCrossMonth'] = true;
-                  } else {
-                    // If start date is in next month, keep original date
-                    processedTournament['startDay'] = startDate.day;
-                    processedTournament['startDateFull'] = startDate;
+          // Process tournaments in current month
+          for (var monthData in currentMonthData) {
+            if (monthData.containsKey('Tournaments')) {
+              final List<dynamic> tournamentsInMonth = monthData['Tournaments'];
+
+              for (var tournament in tournamentsInMonth) {
+                Map<String, dynamic> processedTournament =
+                    Map<String, dynamic>.from(tournament);
+
+                // 解析开始日期
+                if (tournament['startDate'] != null) {
+                  try {
+                    final DateTime startDate =
+                        DateTime.parse(tournament['startDate']);
+
+                    // Modified: No longer restrict to only add when start date is in current month
+                    // If start date is in current month
+                    if (startDate.month == _currentMonth.month &&
+                        startDate.year == _currentMonth.year) {
+                      processedTournament['startDay'] = startDate.day;
+                      processedTournament['startDateFull'] = startDate;
+                    } else if (startDate.month < _currentMonth.month ||
+                        (startDate.year < _currentMonth.year &&
+                            startDate.month > _currentMonth.month)) {
+                      // If start date is in previous month, set to 1st day of current month
+                      processedTournament['startDay'] = 1;
+                      processedTournament['startDateFull'] =
+                          DateTime(_currentMonth.year, _currentMonth.month, 1);
+                      processedTournament['isCrossMonth'] = true;
+                    } else {
+                      // If start date is in next month, keep original date
+                      processedTournament['startDay'] = startDate.day;
+                      processedTournament['startDateFull'] = startDate;
+                    }
+                  } catch (e) {
+                    print(
+                        'Error parsing start date: ${tournament['startDate']} - $e');
+                    processedTournament['startDay'] =
+                        _extractDayFromString(tournament['startDate']);
                   }
-                } catch (e) {
-                  print(
-                      'Error parsing start date: ${tournament['startDate']} - $e');
-                  processedTournament['startDay'] =
-                      _extractDayFromString(tournament['startDate']);
                 }
-              }
 
-              // 解析结束日期
-              if (tournament['endDate'] != null) {
-                try {
-                  final DateTime endDate =
-                      DateTime.parse(tournament['endDate']);
+                // 解析结束日期
+                if (tournament['endDate'] != null) {
+                  try {
+                    final DateTime endDate =
+                        DateTime.parse(tournament['endDate']);
 
-                  // Check if end date is in current month
-                  if (endDate.month == _currentMonth.month &&
-                      endDate.year == _currentMonth.year) {
-                    processedTournament['endDay'] = endDate.day;
-                    processedTournament['endDateFull'] = endDate;
-                  } else if (endDate.month > _currentMonth.month ||
-                      (endDate.year > _currentMonth.year &&
-                          endDate.month < _currentMonth.month)) {
-                    // If end date is in next month, set to last day of current month
-                    processedTournament['endDay'] = _daysInMonth;
-                    processedTournament['endDateFull'] = DateTime(
-                        _currentMonth.year, _currentMonth.month, _daysInMonth);
-                    processedTournament['isCrossNextMonth'] = true;
-                  } else {
-                    // Modified: If end date is in previous month, but start date is also in previous month, don't display
-                    // If start date is in current month or earlier, it should be displayed
-                    if (processedTournament['startDateFull'] != null) {
-                      final startDateFull =
-                          processedTournament['startDateFull'] as DateTime;
-                      if (startDateFull.month == _currentMonth.month &&
-                          startDateFull.year == _currentMonth.year) {
-                        // If start date is in current month, keep this tournament
-                        processedTournament['endDay'] =
-                            1; // Set to first day of current month
-                        processedTournament['endDateFull'] = DateTime(
-                            _currentMonth.year, _currentMonth.month, 1);
+                    // Check if end date is in current month
+                    if (endDate.month == _currentMonth.month &&
+                        endDate.year == _currentMonth.year) {
+                      processedTournament['endDay'] = endDate.day;
+                      processedTournament['endDateFull'] = endDate;
+                    } else if (endDate.month > _currentMonth.month ||
+                        (endDate.year > _currentMonth.year &&
+                            endDate.month < _currentMonth.month)) {
+                      // If end date is in next month, set to last day of current month
+                      processedTournament['endDay'] = _daysInMonth;
+                      processedTournament['endDateFull'] = DateTime(
+                          _currentMonth.year,
+                          _currentMonth.month,
+                          _daysInMonth);
+                      processedTournament['isCrossNextMonth'] = true;
+                    } else {
+                      // Modified: If end date is in previous month, but start date is also in previous month, don't display
+                      // If start date is in current month or earlier, it should be displayed
+                      if (processedTournament['startDateFull'] != null) {
+                        final startDateFull =
+                            processedTournament['startDateFull'] as DateTime;
+                        if (startDateFull.month == _currentMonth.month &&
+                            startDateFull.year == _currentMonth.year) {
+                          // If start date is in current month, keep this tournament
+                          processedTournament['endDay'] =
+                              1; // Set to first day of current month
+                          processedTournament['endDateFull'] = DateTime(
+                              _currentMonth.year, _currentMonth.month, 1);
+                        } else {
+                          // If both start and end are not in current month, skip
+                          continue;
+                        }
                       } else {
-                        // If both start and end are not in current month, skip
                         continue;
                       }
-                    } else {
-                      continue;
                     }
+                  } catch (e) {
+                    print(
+                        'Error parsing end date: ${tournament['endDate']} - $e');
+                    processedTournament['endDay'] =
+                        _extractDayFromString(tournament['endDate']);
                   }
-                } catch (e) {
-                  print(
-                      'Error parsing end date: ${tournament['endDate']} - $e');
-                  processedTournament['endDay'] =
-                      _extractDayFromString(tournament['endDate']);
                 }
-              }
 
-              // 添加到比赛列表
+                // 添加到比赛列表
+                _tournaments.add(processedTournament);
+              }
+            }
+          }
+
+          // Process cross-month tournaments - Check if tournaments from previous and next month extend into current month
+          _processCrossMonthTournaments();
+
+          _isLoading = false;
+        });
+      } else {
+        // 处理WTA数据格式
+        setState(() {
+          _tournaments = [];
+
+          // WTA数据在content字段中
+          final List<dynamic> wtaTournaments = data['content'] ?? [];
+
+          for (var tournament in wtaTournaments) {
+            Map<String, dynamic> processedTournament = {};
+
+            // 转换WTA数据格式为与ATP兼容的格式
+            processedTournament['Name'] = tournament['title'] ?? '';
+            processedTournament['Location'] =
+                '${tournament['city'] ?? ''}, ${tournament['country'] ?? ''}';
+            processedTournament['Surface'] = tournament['surface'] ?? '';
+            processedTournament['Type'] = tournament['tournamentGroup']
+                        ?['level']
+                    ?.replaceAll('WTA ', '') ??
+                '';
+            processedTournament['TournamentImage'] =
+                'https://www.wtatennis.com/resources/v6.41.0/i/elements/tournament-hard.jpg';
+            if (tournament['TournamentImage'] == null) {
+              if (tournament['surface'] == 'Grass') {
+                processedTournament['TournamentImage'] =
+                    'https://www.wtatennis.com/resources/v6.41.0/i/elements/tournament-grass.jpg';
+              } else if (tournament['surface'] == 'Clay') {
+                processedTournament['TournamentImage'] =
+                    'https://www.wtatennis.com/resources/v6.41.0/i/elements/tournament-clay.jpg';
+              } else {
+                processedTournament['TournamentImage'] =
+                    'https://www.wtatennis.com/resources/v6.41.0/i/elements/tournament-hard.jpg';
+              }
+            } else {
+              processedTournament['TournamentImage'] =
+                  tournament['TournamentImage'];
+            }
+            processedTournament['PrizeMoneyDetails'] =
+                '${tournament['prizeMoney'] ?? 0} ${tournament['prizeMoneyCurrency'] ?? 'USD'}';
+
+            // 处理日期
+            if (tournament['startDate'] != null) {
+              try {
+                final DateTime startDate =
+                    DateTime.parse(tournament['startDate']);
+                processedTournament['startDate'] = tournament['startDate'];
+
+                // 如果开始日期在当前月份
+                if (startDate.month == _currentMonth.month &&
+                    startDate.year == _currentMonth.year) {
+                  processedTournament['startDay'] = startDate.day;
+                  processedTournament['startDateFull'] = startDate;
+                } else if (startDate.month < _currentMonth.month ||
+                    startDate.year < _currentMonth.year) {
+                  // 如果开始日期在当前月份之前
+                  processedTournament['startDay'] = 1;
+                  processedTournament['startDateFull'] =
+                      DateTime(_currentMonth.year, _currentMonth.month, 1);
+                }
+              } catch (e) {
+                print('Error parsing WTA start date: $e');
+              }
+            }
+
+            if (tournament['endDate'] != null) {
+              try {
+                final DateTime endDate = DateTime.parse(tournament['endDate']);
+                processedTournament['endDate'] = tournament['endDate'];
+
+                // 如果结束日期在当前月份
+                if (endDate.month == _currentMonth.month &&
+                    endDate.year == _currentMonth.year) {
+                  processedTournament['endDay'] = endDate.day;
+                  processedTournament['endDateFull'] = endDate;
+                } else if (endDate.month > _currentMonth.month ||
+                    endDate.year > _currentMonth.year) {
+                  // 如果结束日期在当前月份之后
+                  processedTournament['endDay'] = _daysInMonth;
+                  processedTournament['endDateFull'] = DateTime(
+                      _currentMonth.year, _currentMonth.month, _daysInMonth);
+                }
+              } catch (e) {
+                print('Error parsing WTA end date: $e');
+              }
+            }
+
+            // 添加到赛事列表中
+            if ((processedTournament['startDay'] != null ||
+                    processedTournament['endDay'] != null) &&
+                (_currentMonth.month >=
+                        DateTime.parse(tournament['startDate']).month &&
+                    _currentMonth.month <=
+                        DateTime.parse(tournament['endDate']).month)) {
               _tournaments.add(processedTournament);
             }
           }
-        }
-
-        // Process cross-month tournaments - Check if tournaments from previous and next month extend into current month
-        _processCrossMonthTournaments();
-
-        _isLoading = false;
-      });
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       print('Error loading tournament data: $e');
       setState(() {
@@ -263,19 +342,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     }
   }
 
-  // Load data from built-in resource file
-  Future<Map<String, dynamic>> _loadFromAsset() async {
-    print('Loading data from built-in resource file');
-    try {
-      final String jsonData =
-          await rootBundle.loadString('assets/2025_atp_tournament.json');
-      return json.decode(jsonData);
-    } catch (e) {
-      print('Failed to read built-in resource file: $e');
-      // Return an empty data structure to avoid null errors
-      return {'TournamentDates': []};
-    }
-  }
+  // This method is no longer needed as we load directly in _loadTournamentsFromAsset
 
   // 从字符串中提取日期数字
   int _extractDayFromString(String dateStr) {
@@ -409,22 +476,6 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
         }
       }
     }
-  }
-
-  void _previousMonth() {
-    setState(() {
-      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month - 1, 1);
-      _updateCalendarData();
-    });
-    _loadTournamentsFromAsset();
-  }
-
-  void _nextMonth() {
-    setState(() {
-      _currentMonth = DateTime(_currentMonth.year, _currentMonth.month + 1, 1);
-      _updateCalendarData();
-    });
-    _loadTournamentsFromAsset();
   }
 
   @override
@@ -586,77 +637,145 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     const String atp250Svg = 'assets/images/categorystamps_250.png';
     const String atp500Svg = 'assets/images/categorystamps_500.png';
     const String atpMasterSvg = 'assets/images/categorystamps_1000.png';
+    const String wta250Svg = 'assets/svg/250k-tag.svg';
+    const String wta500Svg = 'assets/svg/500k-tag.svg';
+    const String wtaMasterSvg = 'assets/svg/1000k-tag.svg';
+    const String ao = 'assets/images/ao.png';
+    const String usopen = 'assets/images/usopen.jpg';
+    const String wim = 'assets/images/wim.png';
+    const String rg = 'assets/images/rg.png';
 
     // Create badge based on tournament type - using SVG images
     Widget typeBadge;
     switch (type) {
       case '1000':
         typeBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
           // decoration: BoxDecoration(
           //   color: Colors.black54,
           //   borderRadius: BorderRadius.circular(4),
           //   border: Border.all(color: Colors.white24, width: 0.5),
           // ),
-          child: Image.asset(
-            atpMasterSvg,
-            width: 80,
-            height: 44,
-            color: Colors.white,
-          ),
+          child: _currentTourType == 'ATP'
+              ? Image.asset(
+                  atpMasterSvg,
+                  width: 80,
+                  height: 44,
+                  color: Colors.white,
+                )
+              : SvgPicture.asset(
+                  wtaMasterSvg,
+                  width: 40,
+                  height: 22,
+                ),
         );
         break;
       case '500':
         typeBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
           // decoration: BoxDecoration(
           //   color: Colors.black54,
           //   borderRadius: BorderRadius.circular(4),
           //   border: Border.all(color: Colors.white24, width: 0.5),
           // ),
-          child: Image.asset(
-            atp500Svg,
-            width: 120,
-            height: 44,
-            color: Colors.white,
-          ),
+          child: _currentTourType == 'ATP'
+              ? Image.asset(
+                  atp500Svg,
+                  width: 120,
+                  height: 44,
+                  color: Colors.white,
+                )
+              : SvgPicture.asset(
+                  wta500Svg,
+                  width: 40,
+                  height: 22,
+                ),
         );
         break;
       case '250':
         typeBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-          // decoration: BoxDecoration(
-          //     // color: Colors.black54,
-          //     // borderRadius: BorderRadius.circular(4),
-          //     // border: Border.all(color: Colors.white24, width: 0.5),
-          //     ),
-          child: Image.asset(
-            atp250Svg,
-            width: 120,
-            height: 44,
-            color: Colors.white,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+          child: _currentTourType == 'ATP'
+              ? Image.asset(
+                  atp250Svg,
+                  width: 120,
+                  height: 44,
+                  color: Colors.white,
+                )
+              : SvgPicture.asset(
+                  wta250Svg,
+                  width: 40,
+                  height: 22,
+                ),
         );
         break;
       default:
-        typeBadge = Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: Colors.white24, width: 0.5),
-          ),
-          child: Text(
-            type,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              fontFamily: 'Serif',
-              letterSpacing: 0.5,
+        if (tournament['Name'].toString() == 'Roland Garros' ||
+            tournament['Name'].toString() == 'Roland Garros - Paris, France') {
+          typeBadge = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+            child: Image.asset(
+              rg,
+              width: 44,
+              height: 44,
             ),
-          ),
-        );
+          );
+        } else if (tournament['Name']
+            .toString()
+            .toLowerCase()
+            .contains('us open')) {
+          typeBadge = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+            child: Image.asset(
+              usopen,
+              width: 44,
+              height: 44,
+            ),
+          );
+        } else if (tournament['Name']
+            .toString()
+            .toLowerCase()
+            .contains('australian open')) {
+          typeBadge = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+            child: Image.asset(
+              ao,
+              width: 44,
+              height: 44,
+            ),
+          );
+        } else if (tournament['Name']
+            .toString()
+            .toLowerCase()
+            .contains('wimbledon')) {
+          typeBadge = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+            child: Image.asset(
+              wim,
+              width: 44,
+              height: 44,
+            ),
+          );
+        } else {
+          typeBadge = Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+            decoration: BoxDecoration(
+              color: Colors.black54,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.white24, width: 0.5),
+            ),
+            child: Text(
+              type,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                fontFamily: 'Serif',
+                letterSpacing: 0.5,
+              ),
+            ),
+          );
+        }
     }
 
     return Card(
@@ -671,54 +790,98 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
         onTap: () => _showTournamentDetails(tournament),
         child: Stack(
           children: [
-            // Background image
-            Image.network(
-              tournamentImage,
-              fit: BoxFit.cover,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                // 加载中显示黑色背景
-                return Container(
-                  color: const Color.fromARGB(255, 75, 75, 75),
-                  child: Center(
-                    child: CircularProgressIndicator(
-                      value: loadingProgress.expectedTotalBytes != null
-                          ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                          : null,
-                      valueColor: AlwaysStoppedAnimation<Color>(_primaryColor),
+            // Background image with ClipRRect for proper rounded corners
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              child: Stack(
+                children: [
+                  // 黑色背景
+                  Container(
+                    color: Colors.black,
+                    height: 240,
+                    width: double.infinity,
+                  ),
+                  // 渐进式加载图片
+                  Positioned.fill(
+                    child: Image.network(
+                      tournamentImage,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+
+                        return Stack(
+                          children: [
+                            // 模糊的预览（随着加载进度逐渐变清晰）
+                            Opacity(
+                              opacity:
+                                  loadingProgress.expectedTotalBytes != null
+                                      ? (loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!)
+                                      : 0.3,
+                              child: Container(
+                                color: const Color.fromARGB(255, 30, 30, 30),
+                              ),
+                            ),
+                            // 加载进度指示器
+                            Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(
+                                    value: loadingProgress.expectedTotalBytes !=
+                                            null
+                                        ? loadingProgress
+                                                .cumulativeBytesLoaded /
+                                            loadingProgress.expectedTotalBytes!
+                                        : null,
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                        _primaryColor),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    '${((loadingProgress.expectedTotalBytes != null ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! : 0) * 100).toStringAsFixed(0)}%',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: Colors.black,
+                          child: Center(
+                            child: Icon(
+                              Icons.sports_tennis,
+                              color: Colors.white.withOpacity(0.3),
+                              size: 48,
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                // 图片加载失败时显示黑色背景
-                return Container(
-                  color: Colors.black,
-                  child: Center(
-                    child: Icon(
-                      Icons.sports_tennis,
-                      color: Colors.white.withOpacity(0.3),
-                      size: 48,
+                  // 渐变遮罩（与图片圆角一致）
+                  Container(
+                    height: 240,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.2),
+                          Colors.black.withOpacity(0.5),
+                          Colors.black.withOpacity(0.85),
+                        ],
+                        stops: const [0.2, 0.6, 0.9],
+                      ),
                     ),
                   ),
-                );
-              },
-            ),
-            // Gradient overlay
-            Container(
-              height: 240,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.2),
-                    Colors.black.withOpacity(0.5),
-                    Colors.black.withOpacity(0.8),
-                  ],
-                  stops: const [0.2, 0.6, 0.9],
-                ),
+                ],
               ),
             ),
             // Content layout - optimize spacing and font size
@@ -734,7 +897,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                   children: [
                     // Tournament level badge
                     Center(child: typeBadge),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8),
 
                     // Tournament name - main title
                     Flexible(
@@ -1003,6 +1166,39 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                         children: [
                           Text(
                             _currentMonth.year.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_drop_down,
+                            color: _primaryColor,
+                            size: 20,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  // ATP/WTA选择器
+                  GestureDetector(
+                    onTap: () {
+                      _showTourTypePicker(context);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min, // 设置为最小尺寸
+                        children: [
+                          Text(
+                            _currentTourType,
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 16,
@@ -1662,5 +1858,132 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
       'Dec'
     ];
     return months[month - 1];
+  }
+
+  // 显示ATP/WTA选择器
+  void _showTourTypePicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _secondaryColor,
+      isScrollControlled: true, // 允许弹窗内容可滚动
+      useSafeArea: true, // 使用安全区域
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16.0)),
+      ),
+      builder: (BuildContext context) {
+        // 获取底部安全区域高度
+        final bottomPadding = MediaQuery.of(context).padding.bottom;
+
+        return Container(
+          padding: EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0 + bottomPadding),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Select Tournament Type',
+                    style: TextStyle(
+                      color: _primaryColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  // IconButton(
+                  //   icon: const Icon(Icons.close, color: Colors.white),
+                  //   onPressed: () => Navigator.pop(context),
+                  // ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Column(
+                children: [
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _currentTourType = 'ATP';
+                      });
+                      _loadTournamentsFromAsset();
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _currentTourType == 'ATP'
+                            ? _primaryColor.withOpacity(1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _currentTourType == 'ATP'
+                              ? _primaryColor.withOpacity(1)
+                              : Colors.grey.withOpacity(0.3),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'ATP',
+                          style: TextStyle(
+                            color: _currentTourType == 'ATP'
+                                ? Colors.black
+                                : Colors.white,
+                            fontSize: 16,
+                            fontWeight: _currentTourType == 'ATP'
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _currentTourType = 'WTA';
+                      });
+                      _loadTournamentsFromAsset();
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: _currentTourType == 'WTA'
+                            ? _primaryColor.withOpacity(1)
+                            : Colors.transparent,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: _currentTourType == 'WTA'
+                              ? _primaryColor.withOpacity(1)
+                              : Colors.grey.withOpacity(0.3),
+                          width: 1.0,
+                        ),
+                      ),
+                      child: Center(
+                        child: Text(
+                          'WTA',
+                          style: TextStyle(
+                            color: _currentTourType == 'WTA'
+                                ? Colors.black
+                                : Colors.white,
+                            fontSize: 16,
+                            fontWeight: _currentTourType == 'WTA'
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

@@ -75,16 +75,26 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
     return name;
   }
 
+  // 添加新的变量来存储不同类型的排名数据
+  List<dynamic> _atpSinglesPlayers = [];
+  List<dynamic> _atpDoublesPlayers = [];
+  List<dynamic> _wtaSinglesPlayers = [];
+  List<dynamic> _wtaDoublesPlayers = [];
+
+  // 修改加载球员排名数据的方法
   // 加载球员排名数据
   Future<void> _loadPlayerRankings() async {
-    if (_isLoading) return;
-
+    // 先清空当前数据并显示加载状态
     setState(() {
+      _players = [];
+      _filteredPlayers = [];
       _isLoading = true;
     });
 
     try {
-      final players = await _apiService.getPlayerRankings();
+      final players = _showATP
+          ? await _apiService.getPlayerRankings()
+          : await _apiService.getWTAPlayerRankings();
 
       setState(() {
         _players = players;
@@ -99,6 +109,8 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
       print('加载排名数据失败: $e');
     }
   }
+
+// 修改筛选选项的构建方法
 
   // 搜索输入变化处理
   void _onSearchChanged() {
@@ -305,10 +317,11 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                       ),
                       constraints: const BoxConstraints(maxHeight: 300),
                       child: _isSearching
-                          ? const Center(
+                          ? Center(
                               child: Padding(
-                                padding: EdgeInsets.all(16.0),
-                                child: CircularProgressIndicator(),
+                                padding: const EdgeInsets.all(16.0),
+                                child: CircularProgressIndicator(
+                                    color: _primaryColor),
                               ),
                             )
                           : ListView.builder(
@@ -328,7 +341,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                                   subtitle: Text(
                                     'Rank #${player['RankNo']}',
                                     style: const TextStyle(
-                                        color: const Color(0xFF6B6B6B)),
+                                        fontSize: 14, color: Color(0xFF6B6B6B)),
                                   ),
                                   leading: CircleAvatar(
                                     backgroundImage: NetworkImage(
@@ -341,7 +354,9 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                                                   .startsWith('http')
                                               ? player['UrlHeadshotImage']
                                               : 'https://atptour.com${player['UrlHeadshotImage']}'
-                                          : 'https://via.placeholder.com/40',
+                                          : !_showATP
+                                              ? 'https://www.atptour.com/assets/tournament/assets/headshot_placeholder.jpg'
+                                              : 'https://atptour.com/-/media/alias/player-headshot/default-player-headshot.png',
                                     ),
                                     backgroundColor: Colors.grey[800],
                                   ),
@@ -387,7 +402,8 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                 onRefresh: _refreshData,
                 color: _primaryColor,
                 child: _isLoading && _players.isEmpty
-                    ? const Center(child: CircularProgressIndicator())
+                    ? Center(
+                        child: CircularProgressIndicator(color: _primaryColor))
                     : ListView.builder(
                         controller: _scrollController,
                         itemCount: _filteredPlayers.length,
@@ -416,6 +432,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
             setState(() {
               _showATP = true;
               _showWTA = false;
+              _loadPlayerRankings(); // 切换后重新加载数据
             });
           }),
           const SizedBox(width: 8),
@@ -424,6 +441,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
             setState(() {
               _showATP = false;
               _showWTA = true;
+              _loadPlayerRankings(); // 切换后重新加载数据
             });
           }),
           const Spacer(),
@@ -432,16 +450,18 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
             setState(() {
               _showSingles = true;
               _showDoubles = false;
+              _loadPlayerRankings(); // 切换后重新加载数据
             });
           }),
-          const SizedBox(width: 8),
-          // Doubles 按钮
-          _buildFilterButton('Doubles', _showDoubles, () {
-            setState(() {
-              _showSingles = false;
-              _showDoubles = true;
-            });
-          }),
+          // const SizedBox(width: 8),
+          // // Doubles 按钮
+          // _buildFilterButton('Doubles', _showDoubles, () {
+          //   setState(() {
+          //     _showSingles = false;
+          //     _showDoubles = true;
+          //     _loadPlayerRankings(); // 切换后重新加载数据
+          //   });
+          // }),
         ],
       ),
     );
@@ -532,7 +552,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
           padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           child: Row(
             children: [
-              // 头像
+              // 头像 - 使用占位图片如果没有头像URL
               CircleAvatar(
                 radius: 20,
                 backgroundImage: NetworkImage(
@@ -540,7 +560,9 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                       ? urlHeadshotImage.startsWith('http')
                           ? urlHeadshotImage
                           : 'https://atptour.com$urlHeadshotImage'
-                      : 'https://via.placeholder.com/40',
+                      : _showATP
+                          ? 'https://atptour.com/-/media/alias/player-headshot/default-player-headshot.png'
+                          : 'https://www.atptour.com/assets/tournament/assets/headshot_placeholder.jpg',
                 ),
                 backgroundColor: Colors.grey[800],
               ),

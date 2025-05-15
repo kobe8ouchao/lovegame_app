@@ -5,8 +5,9 @@
  * @version: 1.0
  * @Date: 2025-04-21 17:22:17
  * @LastEditors: ouchao
- * @LastEditTime: 2025-05-07 18:10:07
+ * @LastEditTime: 2025-05-15 16:05:24
  */
+import 'package:LoveGame/utils/timezone_mapping.dart';
 import 'package:html/parser.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -36,19 +37,25 @@ class ApiService {
   }
 
   // 构建URI，根据平台决定是否使用代理
-  static Uri _buildUri(String endpoint) {
+  static Uri _buildUri(String endpoint, String type) {
+    String fullUrls = _baseUrl + endpoint;
     if (kIsWeb) {
-      // Web平台使用CORS代理
-      final String fullUrl = _baseUrl + endpoint;
+      if (type == 'wta') {
+        fullUrls = 'https://api.wtatennis.com$endpoint';
+      }
+
       try {
-        return Uri.parse(_currentProxyUrl + Uri.encodeComponent(fullUrl));
+        return Uri.parse(_currentProxyUrl + Uri.encodeComponent(fullUrls));
       } catch (e) {
         _rotateProxy(); // 如果当前代理有问题，轮换到下一个
-        return Uri.parse(_currentProxyUrl + Uri.encodeComponent(fullUrl));
+        return Uri.parse(_currentProxyUrl + Uri.encodeComponent(fullUrls));
       }
     } else {
       // 移动平台直接请求
-      final String fullUrls = _baseUrl + endpoint;
+      debugPrint('wta&&&&&&&&$type');
+      if (type == 'wta') {
+        fullUrls = 'https://api.wtatennis.com$endpoint';
+      }
       return Uri.parse(_currentProxyUrl + Uri.encodeComponent(fullUrls));
     }
   }
@@ -57,7 +64,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getTournamentCalendar() async {
     try {
       final String endpoint = '/en/-/tournaments/calendar/tour';
-      final Uri uri = _buildUri(endpoint);
+      final Uri uri = _buildUri(endpoint, '');
 
       final response = await http.get(
         uri,
@@ -155,7 +162,7 @@ class ApiService {
       // 4. 获取每个巡回赛的比赛数据
       for (var tournament in todayTournaments) {
         final String scheduleUrl = tournament['ScheduleUrl'];
-        final Uri uri = _buildUri(scheduleUrl);
+        final Uri uri = _buildUri(scheduleUrl, '');
 
         final response = await http.get(
           uri,
@@ -197,6 +204,53 @@ class ApiService {
                 scheduleItem.attributes['data-datetime'] ?? '';
             final String displayTime =
                 scheduleItem.attributes['data-displaytime'] ?? '';
+
+            String adjustedDisplayTime = displayTime;
+
+            if (dateTime.isNotEmpty) {
+              try {
+                // 判断是"Starts At"还是"Not Before"
+                String timePrefix = "";
+                if (displayTime.contains("Starts At")) {
+                  timePrefix = "Starts At ";
+                } else if (displayTime.contains("Not Before")) {
+                  timePrefix = "Not Before ";
+                }
+
+                // 直接解析dateTime（ISO格式）
+                final DateTime originalDateTime = DateTime.parse(dateTime);
+                final localDateTime = TimezoneMapping.convertToLocalTime(
+                    originalDateTime, tournament['Location'] ?? '');
+                debugPrint('当地时间: $originalDateTime');
+                debugPrint('本地时间: $localDateTime');
+
+                debugPrint('时间转换后: $localDateTime $originalDateTime');
+                // 格式化为新的时间字符串
+                final String formattedTime =
+                    '${localDateTime.hour.toString().padLeft(2, '0')}:${localDateTime.minute.toString().padLeft(2, '0')}';
+
+                // 检查日期是否变化
+                bool dateChanged = localDateTime.day != originalDateTime.day ||
+                    localDateTime.month != originalDateTime.month ||
+                    localDateTime.year != originalDateTime.year;
+
+                // 重新构建显示时间，保留原始前缀
+                adjustedDisplayTime = "$timePrefix$formattedTime";
+
+                // 如果日期变化，添加提示
+                if (dateChanged) {
+                  if (localDateTime.isAfter(originalDateTime)) {
+                    adjustedDisplayTime = '$adjustedDisplayTime (Next Day)';
+                  } else {
+                    adjustedDisplayTime = '$adjustedDisplayTime (Before Day)';
+                  }
+                }
+              } catch (e) {
+                debugPrint('时间转换错误: $e');
+                // 出错时使用原始时间
+              }
+            }
+
             final String matchDate =
                 scheduleItem.attributes['data-matchdate'] ?? '';
             final String suffix = scheduleItem.attributes['data-suffix'] ?? '';
@@ -398,7 +452,7 @@ class ApiService {
             // 7. 构建比赛数据，与现有格式保持一致
             final matchData = {
               'roundInfo': round,
-              'matchTime': displayTime,
+              'matchTime': adjustedDisplayTime,
               'player1': player1Name,
               'player2': player2Name,
               'player1Rank': player1Rank,
@@ -442,7 +496,7 @@ class ApiService {
       String tournamentId) async {
     try {
       final String endpoint = '/en/-/www/LiveMatches/2025/$tournamentId';
-      final Uri uri = _buildUri(endpoint);
+      final Uri uri = _buildUri(endpoint, "");
 
       final response = await http.get(
         uri,
@@ -468,7 +522,7 @@ class ApiService {
   static List<Map<String, dynamic>> parseMatchesData(
       Map<String, dynamic> apiData, String tId) {
     List<Map<String, dynamic>> matches = [];
-    debugPrint('parseMatchesData!!!!!!!!!!!${apiData}');
+    debugPrint('parseMatchesData!!!!!!!!!!!$apiData');
     try {
       if (apiData.containsKey('LiveMatches') &&
           apiData['LiveMatches'] is List) {
@@ -521,7 +575,17 @@ class ApiService {
                     'https://www.atptour.com/-/media/images/flags/${countryCode.toLowerCase()}.svg';
               }
             }
-
+            String lastUpdated = '';
+            if (match['LastUpdated'] != null) {
+              try {
+                DateTime dateTime =
+                    DateTime.parse(match['LastUpdated'].toString());
+                lastUpdated = DateFormat('yyyy-MM-dd').format(dateTime);
+              } catch (e) {
+                print('日期格式解析错误: $e');
+                lastUpdated = '';
+              }
+            }
             // 构建比赛数据
             Map<String, dynamic> matchData = {
               'player1':
@@ -565,6 +629,7 @@ class ApiService {
               'isLive': true,
               'matchId': match['MatchId'] ?? '',
               'tournamentId': tournamentId,
+              'LastUpdated': lastUpdated,
               'year': '2025',
             };
             debugPrint('api获取直播比赛数据 $matchData $tournamentId');
@@ -620,9 +685,10 @@ class ApiService {
       for (var set in setScores) {
         if (set['TieBreakScore'] != null) {
           tiebreakScores.add(set['TieBreakScore']);
-        } else {
-          tiebreakScores.add(0);
         }
+        // } else {
+        //   tiebreakScores.add(0);
+        // }
       }
     }
     // 确保至少有3个元素
@@ -657,7 +723,7 @@ class ApiService {
   Future<List<dynamic>> getPlayerRankings() async {
     try {
       const String endpoint = '/en/-/www/rank/sglroll/250?v=1';
-      final Uri uri = _buildUri(endpoint);
+      final Uri uri = _buildUri(endpoint, '');
 
       final response = await http.get(
         uri,
@@ -711,7 +777,7 @@ class ApiService {
     Map<String, List<Map<String, dynamic>>> matchesByDate = {};
     try {
       final String? endpoint = scoresUrl;
-      final Uri uri = _buildUri(endpoint!);
+      final Uri uri = _buildUri(endpoint!, '');
       final response = await http.get(
         uri,
         headers: {
@@ -1057,7 +1123,7 @@ class ApiService {
   static Future<Map<String, dynamic>> getPlayerDetails(String playerId) async {
     try {
       final String endpoint = '/en/-/www/players/hero/$playerId?v=1';
-      final Uri uri = _buildUri(endpoint);
+      final Uri uri = _buildUri(endpoint, '');
 
       final response = await http.get(
         uri,
@@ -1098,7 +1164,7 @@ class ApiService {
     try {
       final String endpoint =
           '/-/Hawkeye/MatchStats/Complete/$year/$tournamentId/$matchId';
-      final Uri uri = _buildUri(endpoint);
+      final Uri uri = _buildUri(endpoint, '');
 
       final response = await http.get(
         uri,
@@ -1231,5 +1297,52 @@ class ApiService {
         },
       },
     };
+  }
+
+// 获取WTA球员排名
+  Future<List<dynamic>> getWTAPlayerRankings() async {
+    try {
+      String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      String endpoint =
+          '/tennis/players/ranked?metric=SINGLES&type=PointsSingles&sort=desc&at=$currentDate&pageSize=200';
+
+      final Uri uri = _buildUri(endpoint, 'wta');
+      debugPrint('getWTAPlayerRankings uri: $uri');
+      final response = await http.get(
+        uri,
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent':
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        },
+      );
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+
+        // 将WTA数据格式转换为与ATP相同的格式
+        final List<dynamic> formattedData = data.map((item) {
+          return {
+            'PlayerId': item['player']['id'].toString(),
+            'Name': item['player']['fullName'],
+            'FirstName': item['player']['firstName'],
+            'LastName': item['player']['lastName'],
+            'CountryCode': item['player']['countryCode'],
+            'RankNo': item['ranking'],
+            'Points': item['points'].toString(),
+            'Movement': item['movement'],
+            'UrlHeadshotImage':
+                'https://wtafiles.blob.core.windows.net/images/headshots/${item['player']['id'].toString()}.jpg', // WTA API没有提供头像URL
+            'UrlCountryFlag':
+                'https://www.wtatennis.com/resources/v6.41.0/i/elements/flags/${item['player']['countryCode'].toLowerCase()}.svg', // WTA API没有提供国旗URL
+          };
+        }).toList();
+
+        return formattedData;
+      } else {
+        throw Exception('Failed to load WTA player rankings');
+      }
+    } catch (e) {
+      throw Exception('Error: $e');
+    }
   }
 }

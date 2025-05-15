@@ -1,6 +1,7 @@
 import 'package:LoveGame/pages/player_details_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class TennisScoreCard extends StatelessWidget {
   final String player1;
@@ -114,44 +115,62 @@ class TennisScoreCard extends StatelessWidget {
               children: [
                 // 直播或已完成状态指示器
                 if (isLive)
-                  Row(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFF94E831),
-                          shape: BoxShape.circle,
-                        ),
+                  if (isLive)
+                    GestureDetector(
+                      onTap: () async {
+                        final Uri url =
+                            Uri.parse('https://www.haixing.cc/live?type=5');
+                        if (!await launchUrl(url)) {
+                          throw Exception('无法打开 $url');
+                        }
+                      },
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 5,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF94E831),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      const Color(0xFF94E831).withOpacity(0.3),
+                                  blurRadius: 6,
+                                  spreadRadius: 2,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'LIVE',
+                            style: TextStyle(
+                              color: Color(0xFF94E831),
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              height: 1.2,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(width: 6),
-                      const Text(
-                        'LIVE',
-                        style: TextStyle(
-                          color: Color(0xFF94E831),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          height: 1.2,
+                    )
+                  else
+                    Row(
+                      children: [
+                        Text(
+                          matchType.toString().toLowerCase() == 'completed'
+                              ? 'Completed'
+                              : 'Schedule',
+                          style: const TextStyle(
+                            color: Color(0xFFAC49FF),
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            height: 1.2,
+                          ),
                         ),
-                      ),
-                    ],
-                  )
-                else
-                  Row(
-                    children: [
-                      Text(
-                        matchType.toString().toLowerCase() == 'completed'
-                            ? 'Completed'
-                            : 'Schedule',
-                        style: const TextStyle(
-                          color: Color(0xFFAC49FF),
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 const SizedBox(width: 6),
                 Text(
                   '${tournamentName.toString().replaceAll(RegExp(r'[\r\n]+'), '')},$roundInfo',

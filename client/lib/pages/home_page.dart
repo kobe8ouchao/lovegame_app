@@ -1,5 +1,8 @@
+import 'package:LoveGame/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:intl/intl.dart';
 import '../components/tennis_calendar.dart';
 import '../components/glass_icon_button.dart';
@@ -9,6 +12,9 @@ import '../components/loading_indicator.dart';
 import 'tournament_calendar_page.dart';
 import '../services/api_service.dart';
 import 'match_details_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'settings_page.dart';
+import '../utils/privacy_utils.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -38,6 +44,9 @@ class _HomePageState extends State<HomePage> {
   String _errorMessage = '';
   String _selectedDateStr = '';
   List<Map<String, dynamic>> _currentTournaments = [];
+  List<String> imageBanners = [
+    'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=1920&auto=format&fit=crop'
+  ];
   @override
   void initState() {
     super.initState();
@@ -48,6 +57,20 @@ class _HomePageState extends State<HomePage> {
     _loadData();
 
     _scrollController.addListener(_onScroll);
+
+    // 检查隐私政策
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPrivacyPolicy();
+    });
+  }
+
+  // 检查隐私政策
+  Future<void> _checkPrivacyPolicy() async {
+    final accepted = await PrivacyUtils.showPrivacyDialog(context);
+    if (!accepted) {
+      // 如果用户拒绝，可以选择退出应用
+      SystemNavigator.pop();
+    }
   }
 
   @override
@@ -304,7 +327,7 @@ class _HomePageState extends State<HomePage> {
           final matchesData = await ApiService.getATPMatchesResultData(
               url['ScoresUrl'], url['Name']);
           // 合并数据
-
+          imageBanners.add(url['TournamentImage']);
           matchesData.forEach((date, matches) {
             if (_completedMatchesByDate.containsKey(date)) {
               _completedMatchesByDate[date]!.addAll(matches);
@@ -397,19 +420,29 @@ class _HomePageState extends State<HomePage> {
   void _updateDisplayedMatches() {
     setState(() {
       _matches.clear();
+      // 获取今天的日期（只保留年月日，不考虑时间）
+      final today = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
 
-      // 1. 先添加直播比赛（优先级最高）
-      if (_liveMatches.isNotEmpty) {
+      // 直接使用selectedDate变量，它已经是DateTime类型
+      final selectedDay =
+          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+      // 1. 只有当选择的日期是今天时，才添加直播比赛（优先级最高）
+      if (selectedDay.isAtSameMomentAs(today) && _liveMatches.isNotEmpty) {
         _matches.addAll(_liveMatches);
       }
 
       // 2. 再添加计划比赛（优先级次之）
-      final scheduledMatches = _scheduledMatchesByDate[_selectedDateStr] ?? [];
-      if (scheduledMatches.isNotEmpty) {
-        _displayedScheduledMatches = scheduledMatches;
-        _matches.addAll(_displayedScheduledMatches);
-      } else {
-        _displayedScheduledMatches = [];
+      if (selectedDay.isAtSameMomentAs(today) || selectedDay.isAfter(today)) {
+        final scheduledMatches =
+            _scheduledMatchesByDate[_selectedDateStr] ?? [];
+        if (scheduledMatches.isNotEmpty) {
+          _displayedScheduledMatches = scheduledMatches;
+          _matches.addAll(_displayedScheduledMatches);
+        } else {
+          _displayedScheduledMatches = [];
+        }
       }
 
       // 3. 最后添加已完成比赛（优先级最低）
@@ -460,7 +493,7 @@ class _HomePageState extends State<HomePage> {
             top: 0,
             left: 0,
             right: 0,
-            height: MediaQuery.of(context).size.height / 3 +
+            height: MediaQuery.of(context).size.height / 3.5 +
                 120, // 高度增加到300，底部部分会被圆角裁剪
             child: ClipRRect(
               borderRadius: const BorderRadius.vertical(
@@ -572,14 +605,19 @@ class _HomePageState extends State<HomePage> {
                       GlassIconButton(
                         icon: Icons.settings,
                         onPressed: () {
-                          // 设置按钮点击事件
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettingsPage(),
+                            ),
+                          );
                         },
                       ),
                     ],
                   ),
                 ),
 
-                SizedBox(height: MediaQuery.of(context).size.height / 3 + 30),
+                SizedBox(height: MediaQuery.of(context).size.height / 3.5 + 20),
 
                 // 比赛列表
                 Expanded(
@@ -603,13 +641,13 @@ class _HomePageState extends State<HomePage> {
                                   child: Column(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Icon(
-                                        Icons.sports_tennis_outlined,
-                                        size: 64,
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onSurface
-                                            .withOpacity(0.5),
+                                      SvgPicture.asset(
+                                        'assets/svg/icon_no_match.svg',
+                                        width: 56,
+                                        height: 56,
+                                        colorFilter: const ColorFilter.mode(
+                                            Color.fromARGB(64, 255, 255, 255),
+                                            BlendMode.srcIn),
                                       ),
                                       const SizedBox(height: 16),
                                       Text(
@@ -617,40 +655,31 @@ class _HomePageState extends State<HomePage> {
                                             ? _errorMessage
                                             : 'No matches ',
                                         style: TextStyle(
-                                          color: Colors.white.withOpacity(0.7),
+                                          color: Colors.white.withOpacity(0.4),
                                           fontSize: 16,
                                         ),
                                       ),
-                                      SizedBox(height: 24),
+                                      const SizedBox(height: 24),
                                       Container(
                                         decoration: BoxDecoration(
                                           borderRadius:
-                                              BorderRadius.circular(12),
-                                          gradient: const LinearGradient(
-                                            colors: [
-                                              Color(0xFF94E831),
-                                              Color(0xFF7BC721)
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color:
+                                                Colors.white.withOpacity(0.4),
+                                            width: 0.5,
                                           ),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: const Color(0xFF94E831)
-                                                  .withOpacity(0.3),
-                                              blurRadius: 8,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
                                         ),
                                         child: ElevatedButton(
                                           onPressed: _onRefresh,
                                           style: ElevatedButton.styleFrom(
-                                            backgroundColor: Colors.transparent,
-                                            foregroundColor: Colors.black,
+                                            backgroundColor:
+                                                Colors.black.withOpacity(0.3),
+                                            foregroundColor:
+                                                Colors.white.withOpacity(0.4),
                                             elevation: 0,
                                             padding: const EdgeInsets.symmetric(
-                                                horizontal: 32, vertical: 8),
+                                                horizontal: 30, vertical: 0),
                                             shape: RoundedRectangleBorder(
                                               borderRadius:
                                                   BorderRadius.circular(8),
@@ -660,7 +689,8 @@ class _HomePageState extends State<HomePage> {
                                             'Refresh',
                                             style: TextStyle(
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w600,
+                                              fontWeight: FontWeight.w400,
+                                              letterSpacing: 0.5,
                                             ),
                                           ),
                                         ),
@@ -776,6 +806,18 @@ class _HomePageState extends State<HomePage> {
                                                       match['tournamentId'] ??
                                                           '',
                                                   year: match['year'] ?? '',
+                                                  player1ImageUrl: match[
+                                                          'player1ImageUrl'] ??
+                                                      '',
+                                                  player2ImageUrl: match[
+                                                          'player2ImageUrl'] ??
+                                                      '',
+                                                  player1FlagUrl:
+                                                      match['player1FlagUrl'] ??
+                                                          '',
+                                                  player2FlagUrl:
+                                                      match['player2FlagUrl'] ??
+                                                          '',
                                                 ),
                                               ),
                                             );
