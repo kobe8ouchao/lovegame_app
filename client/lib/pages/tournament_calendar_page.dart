@@ -1,17 +1,9 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
-import 'dart:io';
 import 'dart:async';
-import 'dart:math' as math;
-import 'package:path_provider/path_provider.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_svg/flutter_svg.dart';
-import '../models/tournament_model.dart';
 import '../services/tournament_service.dart';
-import '../services/api_service.dart';
-import 'package:transparent_image/transparent_image.dart';
 
 class TournamentCalendarPage extends StatefulWidget {
   const TournamentCalendarPage({super.key});
@@ -56,10 +48,6 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     _years = List.generate(5, (index) => currentYear - 2 + index);
   }
 
-  @override
-  void dispose() {
-    super.dispose();
-  }
 
   // Test CORS issues
 
@@ -601,7 +589,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     }
 
     // Use high-quality tournament images and SVG resources consistently
-    final String tournamentImage = _currentTourType == "ATP"
+    final String tournamentImage = _currentTourType == 'ATP'
         ? tournament['tournamentImage2'] ??
             'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=1920&auto=format&fit=crop'
         : tournament['TournamentImage'] ??
@@ -764,12 +752,12 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
           children: [
             // Background image with ClipRRect for proper rounded corners
             ClipRRect(
-              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
               child: Stack(
                 children: [
                   // 黑色背景
                   Container(
-                    color: Color(0xFF0C0D0C),
+                    color: const Color(0xFF0C0D0C),
                     height: 240,
                     width: double.infinity,
                   ),
@@ -923,7 +911,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                         mainAxisSize: MainAxisSize.min, // 设置为 min
                         children: [
                           // Date information
-                          Icon(
+                          const Icon(
                             Icons.calendar_today,
                             color: Colors.white60,
                             size: 14,
@@ -944,11 +932,11 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                           ),
 
                           // Separator
-                          Padding(
-                            padding: const EdgeInsets.symmetric(
+                          const Padding(
+                            padding: EdgeInsets.symmetric(
                                 horizontal: 8), // 减小间距
                             child: Text(
-                              "•",
+                              '•',
                               style: TextStyle(
                                 color: Colors.white60,
                                 fontSize: 14,

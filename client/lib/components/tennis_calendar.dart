@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:ui';
-import 'package:intl/intl.dart';
 
 class TennisCalendar extends StatefulWidget {
   final DateTime selectedDate;
@@ -101,7 +100,7 @@ class _TennisCalendarState extends State<TennisCalendar> {
     final DateTime nextMonth =
         DateTime(selectedDate.year, selectedDate.month + 1, 1);
     // 只添加下个月的前10天
-    final int endDayNext = 10;
+    const int endDayNext = 10;
     for (int i = 1; i <= endDayNext; i++) {
       dates.add(DateTime(nextMonth.year, nextMonth.month, i));
     }

@@ -5,79 +5,148 @@
  * @version: 1.0
  * @Date: 2025-04-21 17:22:17
  * @LastEditors: ouchao
- * @LastEditTime: 2025-05-27 17:29:42
+ * @LastEditTime: 2025-08-25 10:38:38
  */
 import 'package:LoveGame/utils/timezone_mapping.dart';
 import 'package:html/parser.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'dart:io';
+import 'dart:async';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:html/dom.dart' as dom;
 
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'http_service.dart';
+
 class ApiService {
+  // 创建自定义HTTP客户端，处理SSL证书问题
+  static http.Client? _httpClient;
+
+  static http.Client get _client {
+    _httpClient ??= _createHttpClient();
+    return _httpClient!;
+  }
+
+  static http.Client _createHttpClient() {
+    if (kIsWeb) {
+      return http.Client();
+    } else {
+      // 在移动平台上创建支持SSL的客户端
+      return http.Client();
+    }
+  }
+
+  // 创建支持SSL的HTTP请求
+  static Future<http.Response> _makeHttpRequest(
+      Uri uri, Map<String, String> headers,
+      {Duration? timeout}) async {
+    try {
+      if (kIsWeb) {
+        // Web平台使用标准HTTP客户端
+        return await http
+            .get(uri, headers: headers)
+            .timeout(timeout ?? const Duration(seconds: 10));
+      } else {
+        // 移动平台使用自定义客户端
+        print('mobile ----=====uri: $uri');
+        return await _client
+            .get(uri, headers: headers)
+            .timeout(timeout ?? const Duration(seconds: 10));
+      }
+    } catch (e) {
+      if (e.toString().contains('CERTIFICATE_VERIFY_FAILED')) {
+        // 如果SSL证书验证失败，尝试使用不安全的连接（仅用于开发/测试）
+        debugPrint(
+            'SSL certificate verification failed, attempting alternative approach: $e');
+
+        // 对于开发环境，可以尝试跳过证书验证
+        if (kDebugMode) {
+          try {
+            // 创建新的URI，尝试不同的协议或代理
+            final alternativeUri = _buildAlternativeUri(uri);
+            return await _client
+                .get(alternativeUri, headers: headers)
+                .timeout(timeout ?? const Duration(seconds: 10));
+          } catch (altError) {
+            debugPrint('Alternative approach also failed: $altError');
+          }
+        }
+      }
+      rethrow;
+    }
+  }
+
+  // 构建替代URI，尝试不同的代理或协议
+  static Uri _buildAlternativeUri(Uri originalUri) {
+    // 如果当前代理失败，尝试下一个代理
+    _rotateProxy();
+    return Uri.parse(
+        _currentProxyUrl + Uri.encodeComponent(originalUri.toString()));
+  }
+
   // 获取WTA比赛统计数据
   static Future<Map<String, dynamic>> getWTAMatchStats(
       String url, String tournament, String matchId) async {
     try {
       final matchScore = await getWTAMatcheScore(tournament, matchId);
-      debugPrint("matchScore ((()))$matchScore");
+      debugPrint('matchScore ((()))$matchScore');
       if (matchScore.isEmpty) {
         return {};
       }
       String matchUrl =
-          'https://www.wtatennis.com/tournaments/${tournament}/${matchScore['Tournament']['city'].toString().toLowerCase()}/2025/scores/${matchId}';
+          'https://www.wtatennis.com/tournaments/$tournament/${matchScore['Tournament']['city'].toString().toLowerCase()}/2025/scores/$matchId';
       final Uri uri = _buildUri(matchUrl, 'wta');
-      final response = await http.get(
+      final response = await HttpService.get(
         uri,
         headers: {
           'Accept': 'text/html',
           'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-      ).timeout(const Duration(seconds: 10));
+        timeout: const Duration(seconds: 10),
+      );
 
       if (response.statusCode == 200) {
         final document = parse(response.body);
         Map<String, dynamic> matchStats = {
           'Tournament': {},
           'Match': {
-            "TeamTieResults": null,
-            "MatchId": matchId,
-            "IsDoubles": false,
-            "RoundName": "",
-            "Round": {
-              "RoundId": 4,
-              "ShortName": "R16",
-              "LongName": "Round of 16",
-              "ScRoundName": "Round of 16"
+            'TeamTieResults': null,
+            'MatchId': matchId,
+            'IsDoubles': false,
+            'RoundName': '',
+            'Round': {
+              'RoundId': 4,
+              'ShortName': 'R16',
+              'LongName': 'Round of 16',
+              'ScRoundName': 'Round of 16'
             },
-            "CourtName": "",
-            "MatchTimeTotal": matchScore['MatchTimeTotal'],
-            "MatchTime": matchScore['MatchTimeTotal'],
-            "ExtendedMessage": "",
-            "Message": "",
-            "MatchStatus": matchScore['MatchStatus'],
-            "Status": "F",
-            "ServerTeam": -1,
-            "LastServer": null,
-            "WinningPlayerId": "MM58",
-            "Winner": "MM58",
-            "DateSeq": "9",
-            "IsQualifier": false,
-            "IsWatchLive": null,
-            "NumberOfSets": matchScore['NumSets'],
-            "ScoringSystem": "1",
-            "Reason": null,
+            'CourtName': '',
+            'MatchTimeTotal': matchScore['MatchTimeTotal'],
+            'MatchTime': matchScore['MatchTimeTotal'],
+            'ExtendedMessage': '',
+            'Message': '',
+            'MatchStatus': matchScore['MatchStatus'],
+            'Status': 'F',
+            'ServerTeam': -1,
+            'LastServer': null,
+            'WinningPlayerId': 'MM58',
+            'Winner': 'MM58',
+            'DateSeq': '9',
+            'IsQualifier': false,
+            'IsWatchLive': null,
+            'NumberOfSets': matchScore['NumSets'],
+            'ScoringSystem': '1',
+            'Reason': null,
             'PlayerTeam': {
               'Player': {
                 'PlayerId': "${matchScore['PlayerIDA']}",
-                "PlayerCountry": "${matchScore['PlayerCountryA']}",
-                "PlayerFirstName": "${matchScore['PlayerNameFirstA']}",
-                "PlayerLastName": "${matchScore['PlayerNameLastA']}",
-                "PlayerCountryName": ""
+                'PlayerCountry': "${matchScore['PlayerCountryA']}",
+                'PlayerFirstName': "${matchScore['PlayerNameFirstA']}",
+                'PlayerLastName': "${matchScore['PlayerNameLastA']}",
+                'PlayerCountryName': ''
               },
               'SetScores': [],
               'YearToDateStats': {}
@@ -85,10 +154,10 @@ class ApiService {
             'OpponentTeam': {
               'Player': {
                 'PlayerId': "${matchScore['PlayerIDB']}",
-                "PlayerCountry": "${matchScore['PlayerCountryB']}",
-                "PlayerFirstName": "${matchScore['PlayerNameFirstB']}",
-                "PlayerLastName": "${matchScore['PlayerNameLastB']}",
-                "PlayerCountryName": ""
+                'PlayerCountry': "${matchScore['PlayerCountryB']}",
+                'PlayerFirstName': "${matchScore['PlayerNameFirstB']}",
+                'PlayerLastName': "${matchScore['PlayerNameLastB']}",
+                'PlayerCountryName': ''
               },
               'SetScores': [],
               'YearToDateStats': {}
@@ -271,7 +340,7 @@ class ApiService {
                 'Dividend': int.tryParse(player1Parts[0]) ?? 0,
                 'Divisor': int.tryParse(player1Parts[1]) ?? 0
               };
-              debugPrint("label=============$label ${returnStats1[label]}");
+              debugPrint('label=============$label ${returnStats1[label]}');
             } else {
               returnStats1[label] = {'Number': int.tryParse(player1Value) ?? 0};
             }
@@ -345,11 +414,14 @@ class ApiService {
 
   static const String _baseUrl = 'https://www.atptour.com';
   static const List<String> _proxyUrls = [
-    // 'https://api.allorigins.win/raw?url=',
-    // 'https://cors-anywhere.herokuapp.com/',
-    // 'https://cors.sh/?url=',
+    'https://api.allorigins.win/raw?url=',
+    'https://cors-anywhere.herokuapp.com/',
     'https://thingproxy.freeboard.io/fetch/',
-    // 'https://cors.io/?'
+    'https://corsproxy.io/?',
+    'https://api.codetabs.com/v1/proxy?quest=',
+    'https://yacdn.org/proxy/',
+    'https://cors.bridged.cc/',
+    'https://crossorigin.me/',
   ];
   static int _currentProxyIndex = 0;
 
@@ -382,7 +454,7 @@ class ApiService {
     } else {
       // 移动平台直接请求
       if (type == 'wta') {
-        if (endpoint.contains("https")) {
+        if (endpoint.contains('https')) {
           fullUrls = endpoint;
         } else {
           fullUrls = 'https://api.wtatennis.com$endpoint';
@@ -395,17 +467,18 @@ class ApiService {
   // 获取ATP赛事日历数据
   static Future<Map<String, dynamic>> getTournamentCalendar() async {
     try {
-      final String endpoint = '/en/-/tournaments/calendar/tour';
+      const String endpoint = '/en/-/tournaments/calendar/tour';
       final Uri uri = _buildUri(endpoint, '');
 
-      final response = await http.get(
+      final response = await _makeHttpRequest(
         uri,
-        headers: {
+        {
           'Accept': 'application/json',
           'User-Agent':
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-      ).timeout(const Duration(seconds: 10));
+        timeout: const Duration(seconds: 10),
+      );
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -457,6 +530,106 @@ class ApiService {
     return currentTournaments;
   }
 
+  // 使用HeadlessInAppWebView获取赛程HTML内容
+  static Future<String> _getScheduleHtmlWithWebView(String scheduleUrl) async {
+    final completer = Completer<String>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      final String fullUrl = 'https://www.atptour.com$scheduleUrl';
+
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(fullUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('赛程页面 HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载赛程页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('赛程页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 获取页面HTML内容
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始获取赛程页面HTML...');
+                  return document.documentElement.outerHTML;
+                } catch (e) {
+                  console.error('获取HTML时出错:', e);
+                  return '';
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('赛程HTML获取结果长度: ${result?.toString().length ?? 0}');
+
+            if (result != null && result.toString().isNotEmpty) {
+              completer.complete(result.toString());
+            } else {
+              debugPrint('赛程HTML为空，尝试重新获取');
+              await Future.delayed(const Duration(seconds: 2));
+              final retryResult =
+                  await controller.evaluateJavascript(source: jsCode);
+              completer.complete(retryResult?.toString() ?? '');
+            }
+          } catch (e) {
+            debugPrint('获取赛程HTML时出错: $e');
+            completer.complete('');
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('赛程WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint('赛程HTTP错误: ${errorResponse.statusCode}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('赛程WebView请求超时');
+          return '';
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('赛程HeadlessInAppWebView异常: $e');
+      return '';
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('赛程HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放赛程WebView时出错: $e');
+      }
+    }
+  }
+
   // 获取当日巡回赛比赛数据
   static Future<Map<String, List<Map<String, dynamic>>>>
       getScheduelTournamentMatches(DateTime date) async {
@@ -494,19 +667,11 @@ class ApiService {
       // 4. 获取每个巡回赛的比赛数据
       for (var tournament in todayTournaments) {
         final String scheduleUrl = tournament['ScheduleUrl'];
-        final Uri uri = _buildUri(scheduleUrl, '');
 
-        final response = await http.get(
-          uri,
-          headers: {
-            'Accept': 'text/html',
-            'User-Agent':
-                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          },
-        );
-        debugPrint('schedule!!!!!${response.statusCode}');
-        if (response.statusCode == 200) {
-          final document = parse(response.body);
+        // 使用HeadlessInAppWebView获取HTML内容
+        final htmlContent = await _getScheduleHtmlWithWebView(scheduleUrl);
+        if (htmlContent.isNotEmpty) {
+          final document = parse(htmlContent);
 
           // 5. 解析比赛日期
           final tournamentDays =
@@ -542,11 +707,11 @@ class ApiService {
             if (dateTime.isNotEmpty) {
               try {
                 // 判断是"Starts At"还是"Not Before"
-                String timePrefix = "";
-                if (displayTime.contains("Starts At")) {
-                  timePrefix = "Starts At ";
-                } else if (displayTime.contains("Not Before")) {
-                  timePrefix = "Not Before ";
+                String timePrefix = '';
+                if (displayTime.contains('Starts At')) {
+                  timePrefix = 'Starts At ';
+                } else if (displayTime.contains('Not Before')) {
+                  timePrefix = 'Not Before ';
                 }
 
                 // 直接解析dateTime（ISO格式）
@@ -567,7 +732,7 @@ class ApiService {
                     localDateTime.year != originalDateTime.year;
 
                 // 重新构建显示时间，保留原始前缀
-                adjustedDisplayTime = "$timePrefix$formattedTime";
+                adjustedDisplayTime = '$timePrefix$formattedTime';
 
                 // 如果日期变化，添加提示
                 if (dateChanged) {
@@ -607,7 +772,7 @@ class ApiService {
               final spans =
                   locationTimestamp.first.getElementsByTagName('span');
               // 第一个span是球场信息
-              if (spans.length > 0) {
+              if (spans.isNotEmpty) {
                 courtInfo = spans[0].text.trim();
               }
               final timestamp =
@@ -831,7 +996,7 @@ class ApiService {
             matchesByDate[dateStr]!.add(matchData);
           }
         } else {
-          debugPrint('获取比赛数据失败: ${response.statusCode}');
+          debugPrint('获取比赛数据失败: HTML内容为空');
         }
       }
 
@@ -842,30 +1007,215 @@ class ApiService {
     }
   }
 
-  // 获取特定比赛的实时数据
+  // 获取特定比赛的实时数据 - 使用HeadlessInAppWebView
   static Future<Map<String, dynamic>> getLiveTournamentData(
       String tournamentId) async {
+    debugPrint('使用HeadlessInAppWebView获取实时比赛数据: $tournamentId');
+
+    try {
+      final data = await _getLiveTournamentDataWithWebView(tournamentId);
+      if (data.isNotEmpty) {
+        debugPrint('WebView成功获取实时比赛数据');
+        return data;
+      } else {
+        debugPrint('WebView未获取到实时比赛数据，尝试备用方案');
+        return await _fallbackGetLiveTournamentData(tournamentId);
+      }
+    } catch (e) {
+      debugPrint('WebView获取实时比赛数据失败: $e，尝试备用方案');
+      return await _fallbackGetLiveTournamentData(tournamentId);
+    }
+  }
+
+  // 使用HeadlessInAppWebView获取实时比赛数据
+  static Future<Map<String, dynamic>> _getLiveTournamentDataWithWebView(
+      String tournamentId) async {
+    final completer = Completer<Map<String, dynamic>>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      final String apiUrl =
+          'https://www.atptour.com/en/-/www/LiveMatches/2025/$tournamentId';
+
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(apiUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('实时比赛数据 HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载实时比赛页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('实时比赛页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 直接解析页面内容获取实时比赛数据
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始解析实时比赛数据...');
+                  
+                  // 检查页面是否已经包含JSON数据
+                  const bodyText = document.body.textContent || document.body.innerText;
+                  console.log('实时比赛页面内容长度:', bodyText.length);
+                  
+                  // 尝试解析JSON数据
+                  try {
+                    const data = JSON.parse(bodyText);
+                    if (data && typeof data === 'object') {
+                      console.log('成功解析实时比赛JSON数据');
+                      return data;
+                    }
+                  } catch (e) {
+                    console.log('实时比赛页面内容不是JSON格式');
+                  }
+                  
+                  console.log('无法解析实时比赛数据');
+                  return null;
+                } catch (e) {
+                  console.error('实时比赛JavaScript解析错误:', e);
+                  return null;
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('实时比赛JavaScript执行结果: $result');
+            debugPrint('实时比赛JavaScript执行结果类型: ${result.runtimeType}');
+
+            if (result != null) {
+              try {
+                Map<String, dynamic> liveData;
+                if (result is Map) {
+                  liveData = Map<String, dynamic>.from(result);
+                } else if (result is String && result.isNotEmpty) {
+                  try {
+                    liveData = json.decode(result);
+                  } catch (e) {
+                    debugPrint('实时比赛JSON解析失败: $e, 原始数据: $result');
+                    completer.complete({});
+                    return;
+                  }
+                } else {
+                  debugPrint('实时比赛未知的结果格式: $result (${result.runtimeType})');
+                  completer.complete({});
+                  return;
+                }
+
+                if (liveData.isNotEmpty) {
+                  debugPrint('成功解析实时比赛数据');
+                  completer.complete(liveData);
+                } else {
+                  debugPrint('实时比赛数据为空');
+                  completer.complete({});
+                }
+              } catch (e) {
+                debugPrint('解析实时比赛数据失败: $e');
+                completer.complete({});
+              }
+            } else {
+              debugPrint('实时比赛JavaScript返回null，尝试重新获取');
+              // 等待更长时间后重试
+              await Future.delayed(const Duration(seconds: 3));
+              try {
+                final retryResult =
+                    await controller.evaluateJavascript(source: jsCode);
+                debugPrint('实时比赛重试结果: $retryResult');
+                if (retryResult != null && retryResult is Map) {
+                  completer.complete(Map<String, dynamic>.from(retryResult));
+                } else {
+                  completer.complete({});
+                }
+              } catch (e) {
+                debugPrint('实时比赛重试失败: $e');
+                completer.complete({});
+              }
+            }
+          } catch (e) {
+            debugPrint('执行实时比赛JavaScript时出错: $e');
+            completer.complete({});
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('实时比赛WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete({});
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint('实时比赛HTTP错误: ${errorResponse.statusCode}');
+          if (!completer.isCompleted) {
+            completer.complete({});
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('实时比赛WebView请求超时');
+          return <String, dynamic>{};
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('实时比赛HeadlessInAppWebView异常: $e');
+      return {};
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('实时比赛HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放实时比赛WebView时出错: $e');
+      }
+    }
+  }
+
+  // 实时比赛备用方案：原有的HTTP请求方法
+  static Future<Map<String, dynamic>> _fallbackGetLiveTournamentData(
+      String tournamentId) async {
+    debugPrint('实时比赛备用方案获取数据: $tournamentId');
+
     try {
       final String endpoint = '/en/-/www/LiveMatches/2025/$tournamentId';
-      final Uri uri = _buildUri(endpoint, "");
+      final Uri uri = _buildUri(endpoint, '');
 
-      final response = await http.get(
+      final response = await _makeHttpRequest(
         uri,
-        headers: {
+        {
           'Accept': 'application/json',
+          'Referer': 'https://www.atptour.com/en',
+          'X-Requested-With': 'XMLHttpRequest',
           'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-      ).timeout(const Duration(seconds: 10));
-      debugPrint('getLiveTournamentData!!!!!!!!!!!${response.statusCode}');
+        timeout: const Duration(seconds: 10),
+      );
+      debugPrint('实时比赛备用方案状态码: ${response.statusCode}');
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        throw Exception('API request failed: ${response.statusCode}');
+        debugPrint('实时比赛备用方案获取数据失败，状态码: ${response.statusCode}');
+        return {};
       }
     } catch (e) {
-      print('Failed to get live tournament data: $e');
-      rethrow;
+      debugPrint('实时比赛备用方案请求失败: $e');
+      return {};
     }
   }
 
@@ -873,7 +1223,7 @@ class ApiService {
   static List<Map<String, dynamic>> parseMatchesData(
       Map<String, dynamic> apiData, String tId) {
     List<Map<String, dynamic>> matches = [];
-    debugPrint('parseMatchesData!!!!!!!!!!!$apiData');
+    // debugPrint('parseMatchesData!!!!!!!!!!!$apiData');
     try {
       if (apiData.containsKey('LiveMatches') &&
           apiData['LiveMatches'] is List) {
@@ -882,7 +1232,6 @@ class ApiService {
         final tournamentId = tId;
         final location =
             '${apiData['EventCity'] ?? ''}, ${apiData['EventCountry'] ?? ''}';
-
         for (var match in liveMatches) {
           if (!match['IsDoubles']) {
             // 只处理单打比赛
@@ -945,11 +1294,11 @@ class ApiService {
                   '${player2['PlayerFirstName'] ?? ''} ${player2['PlayerLastName'] ?? ''}',
               'player1Rank':
                   playerTeam['Seed'] != null && playerTeam['Seed'] != 0
-                      ? '(${playerTeam['Seed']})'
+                      ? '(${playerTeam['Seed'].toInt()})'
                       : '',
               'player2Rank':
                   opponentTeam['Seed'] != null && opponentTeam['Seed'] != 0
-                      ? '(${opponentTeam['Seed']})'
+                      ? '(${opponentTeam['Seed'].toInt()})'
                       : '',
               'player1Country': player1['PlayerCountry'] ?? '',
               'player2Country': player2['PlayerCountry'] ?? '',
@@ -993,6 +1342,7 @@ class ApiService {
           }
         }
       }
+      debugPrint('liveMatchs====================: $matches');
     } catch (e) {
       print('Failed to parse match data: $e');
     }
@@ -1020,11 +1370,16 @@ class ApiService {
     if (setScores != null) {
       for (var set in setScores) {
         if (set['SetScore'] != null) {
-          scores.add(set['SetScore']);
+          // 安全地转换为int，处理double类型
+          final score = set['SetScore'];
+          if (score is int) {
+            scores.add(score);
+          } else if (score is double) {
+            scores.add(score.toInt());
+          } else if (score is String) {
+            scores.add(int.tryParse(score) ?? 0);
+          }
         }
-        // } else {
-        //   scores.add(0);
-        // }
       }
     }
     // 确保至少有3个元素
@@ -1040,11 +1395,16 @@ class ApiService {
     if (setScores != null) {
       for (var set in setScores) {
         if (set['TieBreakScore'] != null) {
-          tiebreakScores.add(set['TieBreakScore']);
+          // 安全地转换为int，处理double类型
+          final score = set['TieBreakScore'];
+          if (score is int) {
+            tiebreakScores.add(score);
+          } else if (score is double) {
+            tiebreakScores.add(score.toInt());
+          } else if (score is String) {
+            tiebreakScores.add(int.tryParse(score) ?? 0);
+          }
         }
-        // } else {
-        //   tiebreakScores.add(0);
-        // }
       }
     }
     // 确保至少有3个元素
@@ -1075,31 +1435,275 @@ class ApiService {
     // }
   }
 
-  // 获取ATP球员排名
-  Future<List<dynamic>> getPlayerRankings() async {
-    try {
-      const String endpoint = '/en/-/www/rank/sglroll/250?v=1';
-      final Uri uri = _buildUri(endpoint, '');
+  // 使用代理轮换机制的HTTP请求
+  Future<String?> _makeRequestWithProxyRotation(
+      String originalUrl, Map<String, String> headers) async {
+    for (int i = 0; i < _proxyUrls.length; i++) {
+      try {
+        final proxyUrl = _proxyUrls[_currentProxyIndex];
+        final proxiedUrl = proxyUrl + Uri.encodeComponent(originalUrl);
+        debugPrint(
+            '尝试代理 ${_currentProxyIndex + 1}/${_proxyUrls.length}: $proxyUrl');
 
+        final response = await http
+            .get(
+              Uri.parse(proxiedUrl),
+              headers: headers,
+            )
+            .timeout(const Duration(seconds: 15));
+
+        if (response.statusCode == 200) {
+          debugPrint('代理请求成功: ${response.statusCode}');
+          return response.body;
+        } else {
+          debugPrint('代理返回错误状态码: ${response.statusCode}');
+        }
+      } catch (e) {
+        debugPrint('代理 ${_currentProxyIndex + 1} 失败: $e');
+      }
+
+      // 轮换到下一个代理
+      _rotateProxy();
+    }
+
+    return null;
+  }
+
+  // 获取ATP球员排名 - 使用HeadlessInAppWebView
+  Future<List<dynamic>> getPlayerRankings() async {
+    debugPrint('使用HeadlessInAppWebView获取ATP球员排名数据...');
+
+    try {
+      final data = await _getPlayerRankingsWithWebView();
+      if (data.isNotEmpty) {
+        debugPrint('WebView成功获取ATP排名数据，数量: ${data.length}');
+        return data;
+      } else {
+        debugPrint('WebView未获取到数据，尝试备用方案');
+        return await _fallbackGetPlayerRankings();
+      }
+    } catch (e) {
+      debugPrint('WebView获取ATP排名数据失败: $e，尝试备用方案');
+      return await _fallbackGetPlayerRankings();
+    }
+  }
+
+  // 使用HeadlessInAppWebView获取排名数据
+  Future<List<dynamic>> _getPlayerRankingsWithWebView() async {
+    final completer = Completer<List<dynamic>>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(
+            url: WebUri(
+                'https://www.atptour.com/en/-/www/rank/sglroll/250?v=1')),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 直接解析页面内容获取排名数据
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始解析页面排名数据...');
+                  
+                  // 检查页面是否已经包含JSON数据
+                  const bodyText = document.body.textContent || document.body.innerText;
+                  console.log('页面内容长度:', bodyText.length);
+                  
+                  // 尝试解析JSON数据
+                  try {
+                    const data = JSON.parse(bodyText);
+                    if (Array.isArray(data) && data.length > 0) {
+                      console.log('成功解析JSON数据，数量:', data.length);
+                      return data;
+                    }
+                  } catch (e) {
+                    console.log('页面内容不是JSON格式，尝试从DOM解析');
+                  }
+                  
+                  // 如果不是JSON，尝试从表格中提取数据
+                  const rankings = [];
+                  const rows = document.querySelectorAll('table tbody tr, .ranking-row, .player-row');
+                  console.log('找到行数:', rows.length);
+                  
+                  rows.forEach((row, index) => {
+                    try {
+                      const rankElement = row.querySelector('.rank, .ranking, [data-rank]');
+                      const nameElement = row.querySelector('.player-name, .name, a[href*="/players/"]');
+                      const pointsElement = row.querySelector('.points, .ranking-points, [data-points]');
+                      
+                      if (rankElement && nameElement) {
+                        const rank = rankElement.textContent.trim();
+                        const name = nameElement.textContent.trim();
+                        const points = pointsElement ? pointsElement.textContent.trim() : '0';
+                        
+                        rankings.push({
+                          Rank: parseInt(rank) || index + 1,
+                          PlayerFirstName: name.split(' ')[0] || '',
+                          PlayerLastName: name.split(' ').slice(1).join(' ') || '',
+                          Points: parseInt(points.replace(/[^0-9]/g, '')) || 0
+                        });
+                      }
+                    } catch (e) {
+                      console.error('解析行数据失败:', e);
+                    }
+                  });
+                  
+                  console.log('从DOM解析到数据数量:', rankings.length);
+                  return rankings.length > 0 ? rankings : null;
+                } catch (e) {
+                  console.error('JavaScript解析错误:', e);
+                  return null;
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('JavaScript执行结果: $result');
+            debugPrint('JavaScript执行结果类型: ${result.runtimeType}');
+
+            if (result != null) {
+              try {
+                List<dynamic> rankingData;
+                if (result is List) {
+                  rankingData = result.cast<dynamic>();
+                } else if (result is String && result.isNotEmpty) {
+                  try {
+                    rankingData = json.decode(result);
+                  } catch (e) {
+                    debugPrint('JSON解析失败: $e, 原始数据: $result');
+                    completer.complete([]);
+                    return;
+                  }
+                } else {
+                  debugPrint('未知的结果格式: $result (${result.runtimeType})');
+                  completer.complete([]);
+                  return;
+                }
+
+                if (rankingData.isNotEmpty) {
+                  debugPrint('成功解析排名数据，数量: ${rankingData.length}');
+                  completer.complete(rankingData);
+                } else {
+                  debugPrint('排名数据为空');
+                  completer.complete([]);
+                }
+              } catch (e) {
+                debugPrint('解析排名数据失败: $e');
+                completer.complete([]);
+              }
+            } else {
+              debugPrint('JavaScript返回null，尝试重新获取');
+              // 等待更长时间后重试
+              await Future.delayed(const Duration(seconds: 3));
+              try {
+                final retryResult =
+                    await controller.evaluateJavascript(source: jsCode);
+                debugPrint('重试结果: $retryResult');
+                if (retryResult != null &&
+                    retryResult is List &&
+                    retryResult.isNotEmpty) {
+                  completer.complete(retryResult.cast<dynamic>());
+                } else {
+                  completer.complete([]);
+                }
+              } catch (e) {
+                debugPrint('重试失败: $e');
+                completer.complete([]);
+              }
+            }
+          } catch (e) {
+            debugPrint('执行JavaScript时出错: $e');
+            completer.complete([]);
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete([]);
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint('HTTP错误: ${errorResponse.statusCode}');
+          if (!completer.isCompleted) {
+            completer.complete([]);
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('WebView请求超时');
+          return <dynamic>[];
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('HeadlessInAppWebView异常: $e');
+      return [];
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放WebView时出错: $e');
+      }
+    }
+  }
+
+  // 备用方案：原有的HTTP请求方法
+  Future<List<dynamic>> _fallbackGetPlayerRankings() async {
+    const String url = 'https://www.atptour.com/en/-/www/rank/sglroll/250?v=1';
+    debugPrint('备用方案获取ATP球员排名数据: $url');
+
+    try {
       final response = await http.get(
-        uri,
+        Uri.parse(url),
         headers: {
           'Accept': 'application/json',
+          'Referer': 'https://www.atptour.com/en/rankings/singles',
+          'X-Requested-With': 'XMLHttpRequest',
           'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          'Cookie':
+              '_ga=GA1.1.760912777.1744781494; OptanonAlertBoxClosed=2025-04-16T05:31:41.327Z; _fbp=fb.1.1744781503790.957500700664593250; _tt_enable_cookie=1; _ttp=01JRYH9VSHZ7D93CVMEZ3V9WE5_.tt.1; atp_visitor-id=9ed9e1bf-8859-45a2-84e4-edee66ea25d0; _ce.s=v~8517b6f07d5e4eb92cec618d1ff66e0fbf707134~lcw~1748423316300~vir~returning~lva~1748423316300~vpv~5~v11.fhb~1747033157293~v11.lhb~1747637435354~v11.cs~356004~v11.s~6d114a00-394d-11f0-80dd-bba7b4cf98d6~v11.vs~8517b6f07d5e4eb92cec618d1ff66e0fbf707134~v11.ss~1748166515371~v11ls~6d114a00-394d-11f0-80dd-bba7b4cf98d6~lcw~1748508474391; ttcsid_CES2GFBC77UAS1JKFA70=1750038866429::vNAP1-ThO2i35HPPVAUf.65.1750038866429; ttcsid=1750038866430::QN3w5N045j5fzSoWtzvp.66.1750038866430; __gads=ID=b5a2dbe17f4f559f:T=1731463440:RT=1750155161:S=ALNI_MYH3y_uCZ5V1n4b9cCFOjtEp9eRqQ; __gpi=UID=00000f941a166c11:T=1731463440:RT=1750155161:S=ALNI_MaK4RTdlhRWZneZHXLFn5QUUBX1Hw; __eoi=ID=72b707958af4af57:T=1747033156:RT=1750155161:S=AA-Afjak3KbXyZ9-0fFm8eD6KQq-; OptanonConsent=isGpcEnabled=0&datestamp=Tue+Jun+17+2025+18%3A15%3A51+GMT%2B0800+(%E4%B8%AD%E5%9B%BD%E6%A0%87%E5%87%86%E6%97%B6%E9%97%B4)&version=202502.1.0&browserGpcFlag=0&isIABGlobal=false&hosts=&consentId=94e9c412-8984-4e16-9b8e-5455fb388799&interactionCount=1&isAnonUser=1&landingPath=NotLandingPage&groups=C0001%3A1%2CC0002%3A1%2CC0004%3A1%2CC0003%3A1&intType=1&geolocation=TR%3B34&AwaitingReconsent=false; cf_clearance=5uXuquHZM5UwUVtlsvMvpWCPeIzfL8iC2OvOMxWUeLk-1750155351-1.2.1.1-_t1PkFbQ7NrZTd_2BFrCRGia9WpewXsaNS.OdjpUAmhdffcdGb4Q0dW_tEx0tgriUGQm_076aDrszNPr8qJnHpzByn0mjVn6fgVkWnlaK4dRjLUPPrHbzo9DfKcjJX1f2pR1vRd6P_FQg0w5rKiaLlqkGx2CntkiKXiB8AoiXpcIUfmCDHq4ixI6cvFWQpdFw4XwM6tq6VxWCztt4iIg0TZp24YpfqzKaQO.mOiA7uvsqbuBMTbr5I6l412Ev7CdE8j9MINB_txGo9NZi0iay.Hl.4pnpxS.JfnUDOKKGNtX_Sj.dVtcyCLv5UyuUtpEJOijmIYl8YOuM3zbZ5ei7BhpQYwMfZoBdAPxIpJkrMQ; _ga_D7VPPXYD0V=GS2.1.s1750155164\$o73\$g1\$t1750155405\$j60\$l0\$h0; __cf_bm=Z83rc.SGEbouFi3bo_Nw3sKs_qN3La_WR_.o2_mSTw8-1755765248-1.0.1.1-A_XNiMcot_P5Dp5oE8MHaXS3JD4CpYUoiDjcr6hE76KFiTJZfuqT_1LU2xNI0Hq7DB7FzGsV0HJ.FZOHQQTr6tCVDlnIeJdnza7.X3mgLAQ',
         },
-      ).timeout(const Duration(seconds: 10));
+      );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        debugPrint('备用方案ATP排名数据解析成功，数量: ${data.length}');
         return data;
       } else {
-        print('获取排名失败: ${response.statusCode}');
+        debugPrint('备用方案获取ATP排名数据失败，状态码: ${response.statusCode}');
         return [];
       }
     } catch (e) {
-      print('获取排名异常: $e');
-      // 如果API调用失败，返回空列表
+      debugPrint('备用方案ATP排名数据请求失败: $e');
       return [];
     }
   }
@@ -1136,11 +1740,11 @@ class ApiService {
       String endpoint =
           '/tennis/tournaments/$tournamentId/$currentYear/matches/$matchId/score';
       debugPrint(
-          'getWTAMatcheScore!!!!!!!!!!!$tournamentId,$matchId,${endpoint}');
+          'getWTAMatcheScore!!!!!!!!!!!$tournamentId,$matchId,$endpoint');
       final Uri uri = _buildUri(endpoint, 'wta');
-      final response = await http.get(uri);
+      final response = await HttpService.get(uri);
       debugPrint(
-          'getWTAMatcheScore!!!!!!!!!!!$tournamentId,$matchId,${uri} ${response.statusCode}');
+          'getWTAMatcheScore!!!!!!!!!!!$tournamentId,$matchId,$uri ${response.statusCode}');
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data != null && data is List && data.isNotEmpty) {
@@ -1163,205 +1767,343 @@ class ApiService {
     final formattedDate = DateFormat('E, dd MMMM, yyyy').format(date);
     final currentYear = DateTime.now().year.toString();
     int tournamentId = tournament['tournamentGroup']['id'];
-    try {
-      String endpoint =
-          '/tennis/tournaments/$tournamentId/$currentYear/matches?from=$dateStr&to=$dateStr';
-      final Uri uri = _buildUri(endpoint, 'wta');
-      final response = await http.get(uri);
+    // try {
+    String endpoint =
+        '/tennis/tournaments/$tournamentId/$currentYear/matches?from=$dateStr&to=$dateStr';
+    final Uri uri = _buildUri(endpoint, 'wta');
+    final response = await http.get(uri);
+    debugPrint(
+        'getWTAMatches!!!!!!!!!!!$tournamentId,$dateStr,$uri ${response.statusCode}');
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final List<dynamic> matches = data['matches'] ?? [];
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final List<dynamic> matches = data['matches'] ?? [];
+      // 过滤只显示单打比赛
+      final singleMatches =
+          matches.where((match) => match['DrawMatchType'] == 'S').toList();
 
-        // 过滤只显示单打比赛
-        final singleMatches =
-            matches.where((match) => match['DrawMatchType'] == 'S').toList();
+      List<Map<String, dynamic>> formattedMatches = [];
 
-        List<Map<String, dynamic>> formattedMatches = [];
+      for (var match in singleMatches) {
+        // 获取比赛状态
+        final matchState = match['MatchState'] ?? '';
 
-        for (var match in singleMatches) {
-          // 获取比赛状态
-          final matchState = match['MatchState'] ?? '';
+        // 构建球员1信息
+        final player1 = {
+          'Name':
+              '${match['PlayerNameFirstA'] ?? ''} ${match['PlayerNameLastA'] ?? ''}',
+          'Rank': match['SeedA'] ?? '',
+          'Country': match['PlayerCountryA'] ?? '',
+          'ID': match['PlayerIDA'] ?? '',
+        };
 
-          // 构建球员1信息
-          final player1 = {
-            'Name':
-                '${match['PlayerNameFirstA'] ?? ''} ${match['PlayerNameLastA'] ?? ''}',
-            'Rank': match['SeedA'] ?? '',
-            'Country': match['PlayerCountryA'] ?? '',
-            'ID': match['PlayerIDA'] ?? '',
-          };
+        // 构建球员2信息
+        final player2 = {
+          'Name':
+              '${match['PlayerNameFirstB'] ?? ''} ${match['PlayerNameLastB'] ?? ''}',
+          'Rank': match['SeedB'] ?? '',
+          'Country': match['PlayerCountryB'] ?? '',
+          'ID': match['PlayerIDB'] ?? '',
+        };
 
-          // 构建球员2信息
-          final player2 = {
-            'Name':
-                '${match['PlayerNameFirstB'] ?? ''} ${match['PlayerNameLastB'] ?? ''}',
-            'Rank': match['SeedB'] ?? '',
-            'Country': match['PlayerCountryB'] ?? '',
-            'ID': match['PlayerIDB'] ?? '',
-          };
+        // 构建比分信息
+        List<Map<String, dynamic>> sets = [];
 
-          // 构建比分信息
-          List<Map<String, dynamic>> sets = [];
+        // 第一盘
+        if (match['ScoreSet1A'] != null &&
+            match['ScoreSet1A'].isNotEmpty &&
+            match['ScoreSet1B'] != null &&
+            match['ScoreSet1B'].isNotEmpty) {
+          sets.add({
+            'Player1Score': int.tryParse(match['ScoreSet1A']) ?? 0,
+            'Player2Score': int.tryParse(match['ScoreSet1B']) ?? 0,
+            'TiebreakScore': match['ScoreTbSet1'] ?? '',
+          });
+        }
 
-          // 第一盘
-          if (match['ScoreSet1A'] != null &&
-              match['ScoreSet1A'].isNotEmpty &&
-              match['ScoreSet1B'] != null &&
-              match['ScoreSet1B'].isNotEmpty) {
-            sets.add({
-              'Player1Score': int.tryParse(match['ScoreSet1A']) ?? 0,
-              'Player2Score': int.tryParse(match['ScoreSet1B']) ?? 0,
-              'TiebreakScore': match['ScoreTbSet1'] ?? '',
-            });
-          }
+        // 第二盘
+        if (match['ScoreSet2A'] != null &&
+            match['ScoreSet2A'].isNotEmpty &&
+            match['ScoreSet2B'] != null &&
+            match['ScoreSet2B'].isNotEmpty) {
+          sets.add({
+            'Player1Score': int.tryParse(match['ScoreSet2A']) ?? 0,
+            'Player2Score': int.tryParse(match['ScoreSet2B']) ?? 0,
+            'TiebreakScore': match['ScoreTbSet2'] ?? '',
+          });
+        }
 
-          // 第二盘
-          if (match['ScoreSet2A'] != null &&
-              match['ScoreSet2A'].isNotEmpty &&
-              match['ScoreSet2B'] != null &&
-              match['ScoreSet2B'].isNotEmpty) {
-            sets.add({
-              'Player1Score': int.tryParse(match['ScoreSet2A']) ?? 0,
-              'Player2Score': int.tryParse(match['ScoreSet2B']) ?? 0,
-              'TiebreakScore': match['ScoreTbSet2'] ?? '',
-            });
-          }
+        // 第三盘
+        if (match['ScoreSet3A'] != null &&
+            match['ScoreSet3A'].isNotEmpty &&
+            match['ScoreSet3B'] != null &&
+            match['ScoreSet3B'].isNotEmpty) {
+          sets.add({
+            'Player1Score': int.tryParse(match['ScoreSet3A']) ?? 0,
+            'Player2Score': int.tryParse(match['ScoreSet3B']) ?? 0,
+            'TiebreakScore': match['ScoreTbSet3'] ?? '',
+          });
+        }
 
-          // 第三盘
-          if (match['ScoreSet3A'] != null &&
-              match['ScoreSet3A'].isNotEmpty &&
-              match['ScoreSet3B'] != null &&
-              match['ScoreSet3B'].isNotEmpty) {
-            sets.add({
-              'Player1Score': int.tryParse(match['ScoreSet3A']) ?? 0,
-              'Player2Score': int.tryParse(match['ScoreSet3B']) ?? 0,
-              'TiebreakScore': match['ScoreTbSet3'] ?? '',
-            });
-          }
+        // 处理比分
+        List<int> player1SetScores = [];
+        List<int> player2SetScores = [];
+        List<int> player1TiebreakScores = [];
+        List<int> player2TiebreakScores = [];
 
-          // 处理比分
-          List<int> player1SetScores = [];
-          List<int> player2SetScores = [];
-          List<int> player1TiebreakScores = [];
-          List<int> player2TiebreakScores = [];
+        for (var set in sets) {
+          player1SetScores.add(set['Player1Score'] ?? 0);
+          player2SetScores.add(set['Player2Score'] ?? 0);
 
-          for (var set in sets) {
-            player1SetScores.add(set['Player1Score'] ?? 0);
-            player2SetScores.add(set['Player2Score'] ?? 0);
-
-            // 处理抢七
-            if (set['TiebreakScore'] != null &&
-                set['TiebreakScore'].isNotEmpty) {
-              final tiebreakParts = set['TiebreakScore'].toString().split('-');
-              if (tiebreakParts.length == 2) {
-                player1TiebreakScores.add(int.tryParse(tiebreakParts[0]) ?? 0);
-                player2TiebreakScores.add(int.tryParse(tiebreakParts[1]) ?? 0);
-              } else {
-                player1TiebreakScores.add(0);
-                player2TiebreakScores.add(0);
-              }
+          // 处理抢七
+          if (set['TiebreakScore'] != null && set['TiebreakScore'].isNotEmpty) {
+            final tiebreakParts = set['TiebreakScore'].toString().split('-');
+            if (tiebreakParts.length == 2) {
+              player1TiebreakScores.add(int.tryParse(tiebreakParts[0]) ?? 0);
+              player2TiebreakScores.add(int.tryParse(tiebreakParts[1]) ?? 0);
             } else {
               player1TiebreakScores.add(0);
               player2TiebreakScores.add(0);
             }
-          }
-
-          // 确保至少有3个元素（即使没有比分）
-          while (player1SetScores.length < 3) {
-            player1SetScores.add(0);
-          }
-          while (player2SetScores.length < 3) {
-            player2SetScores.add(0);
-          }
-          while (player1TiebreakScores.length < 3) {
+          } else {
             player1TiebreakScores.add(0);
-          }
-          while (player2TiebreakScores.length < 3) {
             player2TiebreakScores.add(0);
           }
-
-          // 确定比赛类型
-          String matchType = 'Scheduled';
-          if (matchState == 'P') {
-            matchType = 'Live';
-          } else if (matchState == 'F') {
-            matchType = 'Completed';
-          } else if (matchState == 'U') {
-            matchType = 'Scheduled';
-          }
-
-          // 确定获胜者
-          bool isPlayer1Winner = false;
-          bool isPlayer2Winner = false;
-          if (matchState == 'F') {
-            if (match['Winner'] == '2') {
-              isPlayer1Winner = true;
-            } else if (match['Winner'] == '3') {
-              isPlayer2Winner = true;
-            }
-          }
-
-          // 创建格式化的比赛数据
-          Map<String, dynamic> formattedMatch = {
-            'player1': player1['Name'],
-            'player2': player2['Name'],
-            'player1Rank': player1['Rank'].toString().isNotEmpty
-                ? '(${player1['Rank'].toString()})'
-                : '',
-            'player2Rank': player2['Rank'].toString().isNotEmpty
-                ? '(${player2['Rank'].toString()})'
-                : '',
-            'player1Country': player1['Country'],
-            'player2Country': player2['Country'],
-            'player1FlagUrl':
-                'https://www.atptour.com/-/media/images/flags/${player1['Country'].toString().toLowerCase()}.svg',
-            'player2FlagUrl':
-                'https://www.atptour.com/-/media/images/flags/${player2['Country'].toString().toLowerCase()}.svg',
-            'player1Id': player1['ID'],
-            'player2Id': player2['ID'],
-            'player1SetScores': player1SetScores,
-            'player2SetScores': player2SetScores,
-            'player1TiebreakScores': player1TiebreakScores,
-            'player2TiebreakScores': player2TiebreakScores,
-            'roundInfo': "Round ${match['RoundID'] ?? ''}",
-            'matchType': matchType,
-            'serving1': match['Serve'] == 'A' ? true : false,
-            'serving2': match['Serve'] == 'B' ? true : false,
-            'matchTime': matchState == 'F' || matchState == 'P'
-                ? '${match['MatchTimeTotal']}'
-                : 'UpComing',
-            'matchDuration': match['MatchTimeTotal'] ?? '',
-            'isPlayer1Winner': isPlayer1Winner,
-            'isPlayer2Winner': isPlayer2Winner,
-            'player1ImageUrl':
-                'https://wtafiles.blob.core.windows.net/images/headshots/${player1['ID'].toString()}.jpg',
-            'player2ImageUrl':
-                'https://wtafiles.blob.core.windows.net/images/headshots/${player2['ID'].toString()}.jpg',
-            'isCompleted': matchState == 'F',
-            'isLive': matchState == 'P',
-            'stadium':
-                '${match['CourtName'] ?? '${match['Venue']['name'] ?? 'Court ${match['CourtID']}'}'}',
-            'typePlayer': 'wta',
-            'tournamentId': tournamentId.toString(),
-            'matchId': match['MatchID'] ?? '',
-            'currentGameScore1': '${match['PointA'] ?? ''}',
-            'currentGameScore2': '${match['PointB'] ?? ''}',
-            'tournamentName':
-                '${tournament['tournamentGroup']['name'] ?? ''} ${tournament['tournamentGroup']['level'] ?? ''}',
-          };
-
-          formattedMatches.add(formattedMatch);
         }
 
-        matchesByDate[formattedDate] = formattedMatches;
-        return formattedMatches;
-      } else {
-        return [];
+        // 确保至少有3个元素（即使没有比分）
+        while (player1SetScores.length < 3) {
+          player1SetScores.add(0);
+        }
+        while (player2SetScores.length < 3) {
+          player2SetScores.add(0);
+        }
+        while (player1TiebreakScores.length < 3) {
+          player1TiebreakScores.add(0);
+        }
+        while (player2TiebreakScores.length < 3) {
+          player2TiebreakScores.add(0);
+        }
+
+        // 确定比赛类型
+        String matchType = 'Scheduled';
+        if (matchState == 'P') {
+          matchType = 'Live';
+        } else if (matchState == 'F') {
+          matchType = 'Completed';
+        } else if (matchState == 'U') {
+          matchType = 'Scheduled';
+        }
+
+        // 确定获胜者
+        bool isPlayer1Winner = false;
+        bool isPlayer2Winner = false;
+        if (matchState == 'F') {
+          if (match['Winner'] == '2') {
+            isPlayer1Winner = true;
+          } else if (match['Winner'] == '3') {
+            isPlayer2Winner = true;
+          }
+        }
+        final String dateTime = match['MatchTimeStamp'] ?? '';
+        String adjustedDisplayTime = '';
+        if (dateTime.isNotEmpty) {
+          try {
+            // 直接解析dateTime（ISO格式）
+            final DateTime originalDateTime = DateTime.parse(dateTime);
+            final localDateTime = TimezoneMapping.convertToLocalTime(
+                originalDateTime, tournament['Location'] ?? '');
+            debugPrint('当地时间: $originalDateTime');
+            debugPrint('本地时间: $localDateTime');
+
+            debugPrint('时间转换后: $localDateTime $originalDateTime');
+            // 格式化为新的时间字符串
+            final String formattedTime =
+                '${localDateTime.hour.toString().padLeft(2, '0')}:${localDateTime.minute.toString().padLeft(2, '0')}';
+
+            // 检查日期是否变化
+            bool dateChanged = localDateTime.day != originalDateTime.day ||
+                localDateTime.month != originalDateTime.month ||
+                localDateTime.year != originalDateTime.year;
+
+            // 重新构建显示时间，保留原始前缀
+            adjustedDisplayTime = formattedTime;
+            debugPrint('本地时间: $adjustedDisplayTime,$dateChanged');
+            // 如果日期变化，添加提示
+            if (dateChanged) {
+              if (localDateTime.isAfter(originalDateTime)) {
+                adjustedDisplayTime = '$adjustedDisplayTime (Next Day)';
+              } else {
+                adjustedDisplayTime = '$adjustedDisplayTime (Before Day)';
+              }
+            }
+          } catch (e) {
+            debugPrint('时间转换错误: $e');
+            // 出错时使用原始时间
+          }
+        }
+
+        // 创建格式化的比赛数据
+        Map<String, dynamic> formattedMatch = {
+          'player1': player1['Name'],
+          'player2': player2['Name'],
+          'player1Rank': player1['Rank'].toString().isNotEmpty
+              ? '(${player1['Rank'].toString()})'
+              : '',
+          'player2Rank': player2['Rank'].toString().isNotEmpty
+              ? '(${player2['Rank'].toString()})'
+              : '',
+          'player1Country': player1['Country'],
+          'player2Country': player2['Country'],
+          'player1FlagUrl':
+              'https://www.atptour.com/-/media/images/flags/${player1['Country'].toString().toLowerCase()}.svg',
+          'player2FlagUrl':
+              'https://www.atptour.com/-/media/images/flags/${player2['Country'].toString().toLowerCase()}.svg',
+          'player1Id': player1['ID'],
+          'player2Id': player2['ID'],
+          'player1SetScores': player1SetScores,
+          'player2SetScores': player2SetScores,
+          'player1TiebreakScores': player1TiebreakScores,
+          'player2TiebreakScores': player2TiebreakScores,
+          'roundInfo': "Round ${match['RoundID'] ?? ''}",
+          'matchType': matchType,
+          'serving1': match['Serve'] == 'A' ? true : false,
+          'serving2': match['Serve'] == 'B' ? true : false,
+          'matchTime': matchState == 'F' || matchState == 'P'
+              ? '${match['MatchTimeTotal']}'
+              : adjustedDisplayTime,
+          'matchDuration': match['MatchTimeTotal'] ?? '',
+          'isPlayer1Winner': isPlayer1Winner,
+          'isPlayer2Winner': isPlayer2Winner,
+          'player1ImageUrl':
+              'https://wtafiles.blob.core.windows.net/images/headshots/${player1['ID'].toString()}.jpg',
+          'player2ImageUrl':
+              'https://wtafiles.blob.core.windows.net/images/headshots/${player2['ID'].toString()}.jpg',
+          'isCompleted': matchState == 'F',
+          'isLive': matchState == 'P',
+          'stadium': match['CourtName'] != null
+              ? '${match['CourtName'] ?? 'Court ${match['CourtID']}'}'
+              : 'Court ${match['CourtID']}',
+          'typePlayer': 'wta',
+          'tournamentId': tournamentId.toString(),
+          'matchId': match['MatchID'] ?? '',
+          'currentGameScore1': '${match['PointA'] ?? ''}',
+          'currentGameScore2': '${match['PointB'] ?? ''}',
+          'tournamentName':
+              '${tournament['tournamentGroup']['name'] ?? ''} ${tournament['tournamentGroup']['level'] ?? ''}',
+        };
+
+        formattedMatches.add(formattedMatch);
       }
-    } catch (e) {
-      print('Error fetching WTA matches: $e');
+
+      matchesByDate[formattedDate] = formattedMatches;
+      return formattedMatches;
+    } else {
       return [];
+    }
+    // } catch (e) {
+    //   print('Error fetching WTA matches: $e');
+    //   return [];
+    // }
+  }
+
+  // 使用HeadlessInAppWebView获取ATP比赛结果HTML内容
+  static Future<String> _getATPResultsHtmlWithWebView(String scoresUrl) async {
+    final completer = Completer<String>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      final String fullUrl = 'https://www.atptour.com$scoresUrl';
+
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(fullUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('ATP比赛结果页面 HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载ATP比赛结果页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('ATP比赛结果页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 获取页面HTML内容
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始获取ATP比赛结果页面HTML...');
+                  return document.documentElement.outerHTML;
+                } catch (e) {
+                  console.error('获取HTML时出错:', e);
+                  return '';
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('ATP比赛结果HTML获取结果长度: ${result?.toString().length ?? 0}');
+
+            if (result != null && result.toString().isNotEmpty) {
+              completer.complete(result.toString());
+            } else {
+              debugPrint('ATP比赛结果HTML为空，尝试重新获取');
+              await Future.delayed(const Duration(seconds: 2));
+              final retryResult =
+                  await controller.evaluateJavascript(source: jsCode);
+              completer.complete(retryResult?.toString() ?? '');
+            }
+          } catch (e) {
+            debugPrint('获取ATP比赛结果HTML时出错: $e');
+            completer.complete('');
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('ATP比赛结果WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint('ATP比赛结果HTTP错误: ${errorResponse.statusCode}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('ATP比赛结果WebView请求超时');
+          return '';
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('ATP比赛结果HeadlessInAppWebView异常: $e');
+      return '';
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('ATP比赛结果HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放ATP比赛结果WebView时出错: $e');
+      }
     }
   }
 
@@ -1369,19 +2111,11 @@ class ApiService {
       getATPMatchesResultData(String? scoresUrl, String? name) async {
     Map<String, List<Map<String, dynamic>>> matchesByDate = {};
     try {
-      final String? endpoint = scoresUrl;
-      final Uri uri = _buildUri(endpoint!, '');
-      final response = await http.get(
-        uri,
-        headers: {
-          'Accept': 'application/json',
-          'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        },
-      );
-      debugPrint('getATPMatchesResultData!!!!!!!!!!!${response.statusCode}');
-      if (response.statusCode == 200) {
-        final document = parse(response.body);
+      // 使用HeadlessInAppWebView获取HTML内容
+      final htmlContent = await _getATPResultsHtmlWithWebView(scoresUrl!);
+      debugPrint('getATPMatchesResultData HTML长度: ${htmlContent.length}');
+      if (htmlContent.isNotEmpty) {
+        final document = parse(htmlContent);
         final accordionItems =
             document.getElementsByClassName('atp_accordion-item');
 
@@ -1431,9 +2165,9 @@ class ApiService {
             final statsItems =
                 matchContent.getElementsByClassName('stats-item');
             final matchCta = matchElement.getElementsByClassName('match-cta');
-            String VarmatchId = "";
-            String VartournamentId = "";
-            String Varyear = "";
+            String VarmatchId = '';
+            String VartournamentId = '';
+            String Varyear = '';
             if (matchCta.isNotEmpty) {
               final links = matchCta.first.getElementsByTagName('a');
               if (links.length >= 2) {
@@ -1731,6 +2465,8 @@ class ApiService {
             }
           }
         }
+      } else {
+        debugPrint('获取ATP比赛结果数据失败: HTML内容为空');
       }
     } catch (e) {
       print('Error fetching ATP matches============: $e');
@@ -1745,14 +2481,17 @@ class ApiService {
       final String endpoint = '/en/-/www/players/hero/$playerId?v=1';
       final Uri uri = _buildUri(endpoint, '');
 
-      final response = await http.get(
+      final response = await _makeHttpRequest(
         uri,
-        headers: {
+        {
           'Accept': 'application/json',
+          'Referer': 'https://www.atptour.com/en/rankings/singles',
+          'X-Requested-With': 'XMLHttpRequest',
           'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-      ).timeout(const Duration(seconds: 10));
+        timeout: const Duration(seconds: 10),
+      );
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
@@ -1775,28 +2514,39 @@ class ApiService {
           'https://www.wtatennis.com/players/$playerId/$playername';
       final Uri uri = _buildUri(playerUrl, 'wta');
       debugPrint('WTAgURI$playerUrl');
-      final response = await http.get(
+      final response = await _makeHttpRequest(
         uri,
-        headers: {
+        {
           'Accept': 'text/html',
+          'Referer': 'https://www.atptour.com/en/rankings/singles',
+          'X-Requested-With': 'XMLHttpRequest',
           'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-      ).timeout(const Duration(seconds: 10));
+        timeout: const Duration(seconds: 10),
+      );
       debugPrint('getWTAPlayerDetails!!!!!!!!!!!${response.statusCode}');
       if (response.statusCode == 200) {
         final document = parse(response.body);
         Map<String, dynamic> playerData = {};
-        final playerImageElements =
-            document.getElementsByClassName('object-fit-cover-picture__img');
-        if (playerImageElements.isNotEmpty) {
-          final srcAttr = playerImageElements.first.attributes['src'];
-          if (srcAttr != null && srcAttr.isNotEmpty) {
-            // 如果src是相对路径，添加基础URL
-            if (srcAttr.startsWith('/')) {
-              playerData['ImageUrl'] = 'https://www.wtatennis.com$srcAttr';
+        // 先查找player-headshot__photo容器
+        final headshotContainers =
+            document.getElementsByClassName('player-headshot__photo');
+        if (headshotContainers.isNotEmpty) {
+          // 在容器内查找object-fit-cover-picture__img元素
+          final playerImageElements = headshotContainers.first
+              .getElementsByClassName('object-fit-cover-picture__img');
+          if (playerImageElements.isNotEmpty) {
+            final srcAttr = playerImageElements.first.attributes['src'];
+            if (srcAttr != null && srcAttr.isNotEmpty) {
+              // 如果src是相对路径，添加基础URL
+              if (srcAttr.startsWith('/')) {
+                playerData['ImageUrl'] = 'https://www.wtatennis.com$srcAttr';
+              } else {
+                playerData['ImageUrl'] = srcAttr;
+              }
             } else {
-              playerData['ImageUrl'] = srcAttr;
+              playerData['ImageUrl'] = ''; // 默认值
             }
           } else {
             playerData['ImageUrl'] = ''; // 默认值
@@ -1804,6 +2554,7 @@ class ApiService {
         } else {
           playerData['ImageUrl'] = ''; // 默认值
         }
+        debugPrint('ImageUrl: ${playerData['ImageUrl']}');
         // 获取球员基本信息
         final bioInfoContainer =
             document.getElementsByClassName('profile-bio__info');
@@ -1815,7 +2566,7 @@ class ApiService {
           // 按顺序分别是持拍手，职业排名，身高，生日，出生地
           for (var i = 0; i < bioItems.length; i++) {
             final item = bioItems[i];
-            debugPrint("$i ==== $item");
+            debugPrint('$i ==== $item');
             final value = item
                 .getElementsByClassName('profile-bio__info-content')
                 .first
@@ -1856,7 +2607,7 @@ class ApiService {
                 }
                 break;
               case 3:
-                debugPrint("$value");
+                debugPrint(value);
                 break;
               case 4:
                 playerData['Birthplace'] = value; // 出生地
@@ -1868,7 +2619,7 @@ class ApiService {
 
         // 获取当前教练
         final currentCoach = document.getElementsByClassName('current-coach');
-        debugPrint("$currentCoach");
+        debugPrint('$currentCoach');
         if (currentCoach.isNotEmpty) {
           final coachValue =
               currentCoach.first.getElementsByClassName('current-coach__info');
@@ -1887,7 +2638,7 @@ class ApiService {
           List<Map<String, String>> seasonStats = [];
 
           for (var block in statBlocks) {
-            debugPrint("$block");
+            debugPrint('$block');
 
             final statValue = block
                 .getElementsByClassName('stat-block__stat')
@@ -1966,7 +2717,7 @@ class ApiService {
         if (profileHeader.isNotEmpty) {
           final dataPlayerStats =
               profileHeader.first.attributes['data-player-stats'];
-          debugPrint("profileHeader 000000$dataPlayerStats");
+          debugPrint('profileHeader 000000$dataPlayerStats');
           if (dataPlayerStats != null && dataPlayerStats.isNotEmpty) {
             try {
               // 解析JSON数据
@@ -2081,14 +2832,15 @@ class ApiService {
           '/-/Hawkeye/MatchStats/Complete/$year/$tournamentId/$matchId';
       final Uri uri = _buildUri(endpoint, '');
 
-      final response = await http.get(
+      final response = await _makeHttpRequest(
         uri,
-        headers: {
+        {
           'Accept': 'application/json',
           'User-Agent':
               'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         },
-      ).timeout(const Duration(seconds: 10));
+        timeout: const Duration(seconds: 10),
+      );
 
       debugPrint('getMatchStats status: ${response.statusCode}');
 
@@ -2215,7 +2967,207 @@ class ApiService {
   }
 
 // 获取WTA球员排名
+  // 获取WTA球员排名 - 使用HeadlessInAppWebView
   Future<List<dynamic>> getWTAPlayerRankings() async {
+    debugPrint('使用HeadlessInAppWebView获取WTA球员排名数据...');
+
+    try {
+      final data = await _getWTAPlayerRankingsWithWebView();
+      if (data.isNotEmpty) {
+        debugPrint('WebView成功获取WTA排名数据，数量: ${data.length}');
+        return data;
+      } else {
+        debugPrint('WebView未获取到WTA数据，尝试备用方案');
+        return await _fallbackGetWTAPlayerRankings();
+      }
+    } catch (e) {
+      debugPrint('WebView获取WTA排名数据失败: $e，尝试备用方案');
+      return await _fallbackGetWTAPlayerRankings();
+    }
+  }
+
+  // 使用HeadlessInAppWebView获取WTA排名数据
+  Future<List<dynamic>> _getWTAPlayerRankingsWithWebView() async {
+    final completer = Completer<List<dynamic>>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      String apiUrl =
+          'https://api.wtatennis.com/tennis/players/ranked?metric=SINGLES&type=PointsSingles&sort=desc&at=$currentDate&pageSize=200';
+
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(apiUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('WTA HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载WTA页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('WTA页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 直接解析页面内容获取WTA排名数据
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始解析WTA页面排名数据...');
+                  
+                  // 检查页面是否已经包含JSON数据
+                  const bodyText = document.body.textContent || document.body.innerText;
+                  console.log('WTA页面内容长度:', bodyText.length);
+                  
+                  // 尝试解析JSON数据
+                  try {
+                    const data = JSON.parse(bodyText);
+                    if (Array.isArray(data) && data.length > 0) {
+                      console.log('成功解析WTA JSON数据，数量:', data.length);
+                      
+                      // 将WTA数据格式转换为与ATP相同的格式
+                      const formattedData = data.map((item) => {
+                        return {
+                          'PlayerId': item.player?.id?.toString() || '',
+                          'Name': item.player?.fullName || '',
+                          'FirstName': item.player?.firstName || '',
+                          'LastName': item.player?.lastName || '',
+                          'CountryCode': item.player?.countryCode || '',
+                          'RankNo': item.ranking || 0,
+                          'Points': item.points?.toString() || '0',
+                          'Movement': item.movement || 0,
+                          'UrlHeadshotImage': 'https://wtafiles.blob.core.windows.net/images/headshots/' + (item.player?.id?.toString() || '') + '.jpg',
+                          'UrlCountryFlag': 'https://www.wtatennis.com/resources/v6.41.0/i/elements/flags/' + (item.player?.countryCode?.toLowerCase() || '') + '.svg'
+                        };
+                      });
+                      
+                      return formattedData;
+                    }
+                  } catch (e) {
+                    console.log('WTA页面内容不是JSON格式');
+                  }
+                  
+                  console.log('无法解析WTA数据');
+                  return null;
+                } catch (e) {
+                  console.error('WTA JavaScript解析错误:', e);
+                  return null;
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('WTA JavaScript执行结果: $result');
+            debugPrint('WTA JavaScript执行结果类型: ${result.runtimeType}');
+
+            if (result != null) {
+              try {
+                List<dynamic> rankingData;
+                if (result is List) {
+                  rankingData = result.cast<dynamic>();
+                } else if (result is String && result.isNotEmpty) {
+                  try {
+                    rankingData = json.decode(result);
+                  } catch (e) {
+                    debugPrint('WTA JSON解析失败: $e, 原始数据: $result');
+                    completer.complete([]);
+                    return;
+                  }
+                } else {
+                  debugPrint('WTA未知的结果格式: $result (${result.runtimeType})');
+                  completer.complete([]);
+                  return;
+                }
+
+                if (rankingData.isNotEmpty) {
+                  debugPrint('成功解析WTA排名数据，数量: ${rankingData.length}');
+                  completer.complete(rankingData);
+                } else {
+                  debugPrint('WTA排名数据为空');
+                  completer.complete([]);
+                }
+              } catch (e) {
+                debugPrint('解析WTA排名数据失败: $e');
+                completer.complete([]);
+              }
+            } else {
+              debugPrint('WTA JavaScript返回null，尝试重新获取');
+              // 等待更长时间后重试
+              await Future.delayed(const Duration(seconds: 3));
+              try {
+                final retryResult =
+                    await controller.evaluateJavascript(source: jsCode);
+                debugPrint('WTA重试结果: $retryResult');
+                if (retryResult != null &&
+                    retryResult is List &&
+                    retryResult.isNotEmpty) {
+                  completer.complete(retryResult.cast<dynamic>());
+                } else {
+                  completer.complete([]);
+                }
+              } catch (e) {
+                debugPrint('WTA重试失败: $e');
+                completer.complete([]);
+              }
+            }
+          } catch (e) {
+            debugPrint('执行WTA JavaScript时出错: $e');
+            completer.complete([]);
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('WTA WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete([]);
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint('WTA HTTP错误: ${errorResponse.statusCode}');
+          if (!completer.isCompleted) {
+            completer.complete([]);
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('WTA WebView请求超时');
+          return <dynamic>[];
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('WTA HeadlessInAppWebView异常: $e');
+      return [];
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('WTA HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放WTA WebView时出错: $e');
+      }
+    }
+  }
+
+  // WTA备用方案：原有的HTTP请求方法
+  Future<List<dynamic>> _fallbackGetWTAPlayerRankings() async {
+    debugPrint('WTA备用方案获取球员排名数据');
+
     try {
       String currentDate = DateFormat('yyyy-MM-dd').format(DateTime.now());
       String endpoint =
@@ -2223,7 +3175,7 @@ class ApiService {
 
       final Uri uri = _buildUri(endpoint, 'wta');
       debugPrint('getWTAPlayerRankings uri: $uri');
-      final response = await http.get(
+      final response = await HttpService.get(
         uri,
         headers: {
           'Accept': 'application/json',
@@ -2246,18 +3198,20 @@ class ApiService {
             'Points': item['points'].toString(),
             'Movement': item['movement'],
             'UrlHeadshotImage':
-                'https://wtafiles.blob.core.windows.net/images/headshots/${item['player']['id'].toString()}.jpg', // WTA API没有提供头像URL
+                'https://wtafiles.blob.core.windows.net/images/headshots/${item['player']['id'].toString()}.jpg',
             'UrlCountryFlag':
-                'https://www.wtatennis.com/resources/v6.41.0/i/elements/flags/${item['player']['countryCode'].toLowerCase()}.svg', // WTA API没有提供国旗URL
+                'https://www.wtatennis.com/resources/v6.41.0/i/elements/flags/${item['player']['countryCode'].toLowerCase()}.svg',
           };
         }).toList();
 
         return formattedData;
       } else {
-        throw Exception('Failed to load WTA player rankings');
+        debugPrint('WTA备用方案获取排名数据失败，状态码: ${response.statusCode}');
+        return [];
       }
     } catch (e) {
-      throw Exception('Error: $e');
+      debugPrint('WTA备用方案排名数据请求失败: $e');
+      return [];
     }
   }
 }

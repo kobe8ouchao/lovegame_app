@@ -1,6 +1,6 @@
 import 'package:LoveGame/pages/player_details_page.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
+import 'package:flutter_svg/svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
 
@@ -406,7 +406,7 @@ class TennisScoreCard extends StatelessWidget {
                                 child: isLive
                                     ? Container(
                                         constraints:
-                                            BoxConstraints(minWidth: 22),
+                                            const BoxConstraints(minWidth: 22),
                                         child: Text(
                                           currentGameScore1.isNotEmpty &&
                                                   currentGameScore1 != 'null'
@@ -514,7 +514,7 @@ class TennisScoreCard extends StatelessWidget {
                                       onTap: () {
                                         if (player2Id != null) {
                                           debugPrint(
-                                              'onTap: ${player2Id},${player2Country}');
+                                              'onTap: $player2Id,$player2Country');
 
                                           Navigator.push(
                                             context,
@@ -788,7 +788,7 @@ class TennisScoreCard extends StatelessWidget {
                             style: TextButton.styleFrom(
                               backgroundColor: isLive
                                   ? const Color(0xFF94E831)
-                                  : Color(0xFF0C0D0C),
+                                  : const Color(0xFF0C0D0C),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                               foregroundColor: Colors.black,
                               shape: RoundedRectangleBorder(

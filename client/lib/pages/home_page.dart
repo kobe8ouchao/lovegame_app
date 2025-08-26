@@ -12,13 +12,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../components/tennis_calendar.dart';
 import '../components/glass_icon_button.dart';
 import '../components/tennis_score_card.dart';
-import '../components/empty_matches_placeholder.dart';
-import '../components/loading_indicator.dart';
-import 'tournament_calendar_page.dart';
 import '../services/api_service.dart';
 import 'match_details_page.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'settings_page.dart';
 import '../utils/privacy_utils.dart';
 
 class HomePage extends StatefulWidget {
@@ -46,7 +41,7 @@ class _HomePageState extends State<HomePage> {
   Map<String, List<Map<String, dynamic>>> _scheduledMatchesByDate = {};
   List<Map<String, dynamic>> _displayedScheduledMatches = [];
   List<Map<String, dynamic>> _displayedWTAMatches = [];
-  String _tournamentLocation = '';
+  final String _tournamentLocation = '';
   String _errorMessage = '';
   String _selectedDateStr = '';
   List<Map<String, dynamic>> _currentTournaments = [];
@@ -423,6 +418,7 @@ class _HomePageState extends State<HomePage> {
     try {
       // 查找当前日期的比赛URL
       final scoresUrls = await _findCurrentTournamentsScoresUrls();
+      debugPrint('找到的比赛URL: $scoresUrls');
       if (scoresUrls.isEmpty) {
         // 如果没有找到比赛URL，使用默认URL
         _completedMatchesByDate = {};
@@ -446,7 +442,7 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      debugPrint(' _loadCompletedMatches ${_selectedDateStr}');
+      debugPrint(' _loadCompletedMatches $_selectedDateStr');
       setState(() {
         _matches.clear();
         if (_completedMatchesByDate.isEmpty) {
@@ -568,7 +564,7 @@ class _HomePageState extends State<HomePage> {
       // 3. 最后添加已完成比赛（优先级最低）
       final completedMatches = _completedMatchesByDate[_selectedDateStr] ?? [];
       debugPrint(
-          ' _updateDisplayedMatches ${_selectedDateStr}----${completedMatches.length}');
+          ' _updateDisplayedMatches $_selectedDateStr----${completedMatches.length}');
 
       if (completedMatches.isNotEmpty) {
         _displayedCompletedMatches = completedMatches;
@@ -634,7 +630,7 @@ class _HomePageState extends State<HomePage> {
                 child: Stack(
                   children: [
                     // 背景图片
-                    Container(
+                    SizedBox(
                       width: double.infinity,
                       height: double.infinity,
                       child: imageBanners.isNotEmpty
@@ -919,7 +915,7 @@ class _HomePageState extends State<HomePage> {
                                         final match = _matches[index];
                                         // 安全检查：确保访问数组元素前先检查数组是否为空
 
-                                        debugPrint('item ===== :${match}');
+                                        debugPrint('item ===== :$match');
                                         return TennisScoreCard(
                                           player1: match['player1'] ?? '',
                                           player2: match['player2'] ?? '',

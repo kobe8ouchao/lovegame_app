@@ -10,22 +10,29 @@
 import 'package:LoveGame/pages/splash_screen.dart';
 import 'package:LoveGame/utils/constants.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'utils/constants.dart';
-import 'package:provider/provider.dart';
 import 'pages/home_page.dart';
 import 'pages/tournament_calendar_page.dart';
 import 'pages/player_rankings_page.dart'; // 添加排名页面导入
-import 'utils/theme_provider.dart';
-import 'services/platform_channel_service.dart';
+import 'utils/ssl_config.dart';
 
 void main() {
+  // 初始化SSL配置
+  SSLConfig.configureSSL();
+  
+  // 设置全局状态栏样式
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+  ));
+  
   runApp(const MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {

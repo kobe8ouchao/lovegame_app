@@ -1,8 +1,8 @@
+import 'package:LoveGame/services/api_service.dart';
 import 'package:flutter/material.dart';
-import '../services/api_service.dart';
-import 'package:flutter/services.dart';
-import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import '../utils/svg_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class PlayerDetailsPage extends StatefulWidget {
@@ -13,13 +13,13 @@ class PlayerDetailsPage extends StatefulWidget {
   final String type; // 添加类型参数
 
   const PlayerDetailsPage({
-    Key? key,
+    super.key,
     required this.playerId,
     required this.playerName,
     required this.playerCountry,
     required this.playerColor,
     required this.type, // 添加类型参数
-  }) : super(key: key);
+  });
 
   @override
   _PlayerDetailsPageState createState() => _PlayerDetailsPageState();
@@ -29,7 +29,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
   bool _isLoading = true;
   String _errorMessage = '';
   Map<String, dynamic> _playerData = {};
-  bool _isFavorite = false;
+  final bool _isFavorite = false;
 
   // 球员基本信息
   String _rank = '';
@@ -306,7 +306,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 球员姓名
-              Container(
+              SizedBox(
                 width: MediaQuery.of(context).size.width * 0.6,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -350,6 +350,12 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
                             fit: BoxFit.cover,
                             placeholderBuilder: (context) =>
                                 Container(color: Colors.grey),
+                            errorBuilder: (context, error, stackTrace) =>
+                                Container(
+                              color: Colors.grey,
+                              child:
+                                  const Icon(Icons.flag, color: Colors.white),
+                            ),
                           )
                         : _playerData['ScRelativeUrlPlayerCountryFlag'] != null
                             ? SvgPicture.network(
@@ -357,6 +363,12 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
                                 fit: BoxFit.cover,
                                 placeholderBuilder: (context) =>
                                     Container(color: Colors.grey),
+                                errorBuilder: (context, error, stackTrace) =>
+                                    Container(
+                                  color: Colors.grey,
+                                  child: const Icon(Icons.flag,
+                                      color: Colors.white),
+                                ),
                               )
                             : Container(color: Colors.grey),
                   ),
@@ -567,8 +579,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
                 const SizedBox(height: 12),
 
                 // 生涯数据内容
-                _buildStatsRow(
-                    'Career High', _careerHighRank),
+                _buildStatsRow('Career High', _careerHighRank),
                 _buildStatsRow('Win/Loss', _careerWinLoss),
                 _buildStatsRow('Titles', _careerTitles),
                 _buildStatsRow('Career Prize Money', _CareerPrizeFormatted),

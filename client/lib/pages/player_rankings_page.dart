@@ -1,9 +1,7 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../services/api_service.dart';
-import '../utils/constants.dart';
 import 'player_details_page.dart'; // 添加这一行导入
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -46,12 +44,18 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
   bool _showSingles = true;
   bool _showDoubles = false;
 
+  // 添加缓存机制
+  final Map<String, List<dynamic>> _cachedData = {};
+  final Set<String> _loadedFilters = {};
+
   @override
   void initState() {
     super.initState();
+    debugPrint('PlayerRankingsPage initState 开始');
     _loadPlayerRankings();
     _scrollController.addListener(_scrollListener);
     _searchController.addListener(_onSearchChanged);
+    debugPrint('PlayerRankingsPage initState 完成');
   }
 
   @override
@@ -77,15 +81,38 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
   }
 
   // 添加新的变量来存储不同类型的排名数据
-  List<dynamic> _atpSinglesPlayers = [];
-  List<dynamic> _atpDoublesPlayers = [];
-  List<dynamic> _wtaSinglesPlayers = [];
-  List<dynamic> _wtaDoublesPlayers = [];
+  final List<dynamic> _atpSinglesPlayers = [];
+  final List<dynamic> _atpDoublesPlayers = [];
+  final List<dynamic> _wtaSinglesPlayers = [];
+  final List<dynamic> _wtaDoublesPlayers = [];
+
+  // 生成缓存键
+  String _getCacheKey() {
+    String type = _showATP ? 'ATP' : 'WTA';
+    String category = _showSingles ? 'Singles' : 'Doubles';
+    return '${type}_$category';
+  }
 
   // 修改加载球员排名数据的方法
-  // 加载球员排名数据
   Future<void> _loadPlayerRankings() async {
-    // 先清空当前数据并显示加载状态
+    debugPrint('=== _loadPlayerRankings 开始执行 ===');
+    String cacheKey = _getCacheKey();
+    debugPrint('Cache Key: $cacheKey');
+    debugPrint(
+        '当前状态: ATP=$_showATP, WTA=$_showWTA, Singles=$_showSingles, Doubles=$_showDoubles');
+
+    // 检查是否已经加载过这个筛选条件的数据
+    if (_cachedData.containsKey(cacheKey)) {
+      setState(() {
+        _players = _cachedData[cacheKey]!;
+        _filteredPlayers = List.from(_cachedData[cacheKey]!);
+        _isLoading = false;
+      });
+      return;
+    }
+
+    // 如果没有缓存，则加载数据
+    debugPrint('开始加载数据...');
     setState(() {
       _players = [];
       _filteredPlayers = [];
@@ -93,9 +120,15 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
     });
 
     try {
+      debugPrint('调用API获取数据: ${_showATP ? "ATP" : "WTA"}');
       final players = _showATP
           ? await _apiService.getPlayerRankings()
           : await _apiService.getWTAPlayerRankings();
+      debugPrint('API返回数据数量: ${players.length}');
+
+      // 缓存数据
+      _cachedData[cacheKey] = players;
+      _loadedFilters.add(cacheKey);
 
       setState(() {
         _players = players;
@@ -103,12 +136,16 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
         _isLoading = false;
         _hasMoreData = false; // 一次性加载所有数据
       });
+      debugPrint('数据加载完成，设置状态完成');
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      print('加载排名数据失败: $e');
+      debugPrint('=== 加载排名数据失败 ===');
+      debugPrint('错误详情: $e');
+      debugPrint('错误类型: ${e.runtimeType}');
     }
+    debugPrint('=== _loadPlayerRankings 执行完成 ===');
   }
 
 // 修改筛选选项的构建方法
@@ -162,7 +199,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
       setState(() {
         _isSearching = false;
       });
-      print('搜索球员失败: $e');
+      debugPrint('搜索球员失败: $e');
     }
   }
 
@@ -362,7 +399,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                                     backgroundColor: Colors.grey[800],
                                   ),
                                   trailing: player['CountryCode'] != null
-                                      ? Container(
+                                      ? SizedBox(
                                           width: 30,
                                           height: 20,
                                           child: _buildCountryFlag(
@@ -433,38 +470,46 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
         children: [
           // ATP 按钮
           _buildFilterButton('ATP', _showATP, () {
-            setState(() {
-              _showATP = true;
-              _showWTA = false;
-              _loadPlayerRankings(); // 切换后重新加载数据
-            });
+            if (!_showATP) {
+              setState(() {
+                _showATP = true;
+                _showWTA = false;
+              });
+              _loadPlayerRankings(); // 使用缓存机制加载数据
+            }
           }),
           const SizedBox(width: 8),
           // WTA 按钮
           _buildFilterButton('WTA', _showWTA, () {
-            setState(() {
-              _showATP = false;
-              _showWTA = true;
-              _loadPlayerRankings(); // 切换后重新加载数据
-            });
+            if (!_showWTA) {
+              setState(() {
+                _showATP = false;
+                _showWTA = true;
+              });
+              _loadPlayerRankings(); // 使用缓存机制加载数据
+            }
           }),
           const Spacer(),
           // Singles 按钮
           _buildFilterButton('Singles', _showSingles, () {
-            setState(() {
-              _showSingles = true;
-              _showDoubles = false;
-              _loadPlayerRankings(); // 切换后重新加载数据
-            });
+            if (!_showSingles) {
+              setState(() {
+                _showSingles = true;
+                _showDoubles = false;
+              });
+              _loadPlayerRankings(); // 使用缓存机制加载数据
+            }
           }),
           // const SizedBox(width: 8),
           // // Doubles 按钮
           // _buildFilterButton('Doubles', _showDoubles, () {
-          //   setState(() {
-          //     _showSingles = false;
-          //     _showDoubles = true;
-          //     _loadPlayerRankings(); // 切换后重新加载数据
-          //   });
+          //   if (!_showDoubles) {
+          //     setState(() {
+          //       _showSingles = false;
+          //       _showDoubles = true;
+          //     });
+          //     _loadPlayerRankings(); // 使用缓存机制加载数据
+          //   }
           // }),
         ],
       ),
@@ -512,8 +557,8 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
     final String firstName = player['FirstName'] ?? '';
     final String lastName = player['LastName'] ?? '';
     final String countryCode = player['CountryCode'] ?? '';
-    final String points = player['Points'] ?? "";
-    final int movement = player['Movement'] ?? 0;
+    final String points = player['Points'] ?? '';
+    final int movement = (player['Movement'] as num?)?.toInt() ?? 0;
     final String urlCountryFlag = player['UrlCountryFlag'] ?? '';
     final String urlHeadshotImage = player['UrlHeadshotImage'] ?? '';
 
@@ -560,16 +605,41 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
               // 头像 - 使用占位图片如果没有头像URL
               CircleAvatar(
                 radius: 20,
-                backgroundImage: NetworkImage(
-                  urlHeadshotImage.isNotEmpty
-                      ? urlHeadshotImage.startsWith('http')
-                          ? urlHeadshotImage
-                          : 'https://atptour.com$urlHeadshotImage'
-                      : _showATP
-                          ? 'https://atptour.com/-/media/alias/player-headshot/default-player-headshot.png'
-                          : 'https://www.atptour.com/assets/tournament/assets/headshot_placeholder.jpg',
-                ),
                 backgroundColor: Colors.grey[800],
+                child: ClipOval(
+                  child: Image.network(
+                    urlHeadshotImage.isNotEmpty
+                        ? urlHeadshotImage.startsWith('http')
+                            ? urlHeadshotImage
+                            : 'https://atptour.com$urlHeadshotImage'
+                        : _showATP
+                            ? 'https://atptour.com/-/media/alias/player-headshot/default-player-headshot.png'
+                            : 'https://www.atptour.com/assets/tournament/assets/headshot_placeholder.jpg',
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.person,
+                        color: Colors.white.withOpacity(0.7),
+                        size: 24,
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                              : null,
+                          strokeWidth: 2,
+                          color: Colors.white.withOpacity(0.5),
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
               const SizedBox(width: 12),
 
@@ -600,7 +670,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                     Row(
                       children: [
                         Text(
-                          '$points',
+                          points,
                           style: TextStyle(
                             color: Colors.white.withOpacity(0.7),
                             fontSize: 12,
@@ -657,7 +727,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
               const SizedBox(width: 16),
 
               // Country Flag & Code
-              Container(
+              SizedBox(
                 width: 80,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
@@ -696,6 +766,12 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
             fullUrl,
             width: 22,
             height: 16,
+            errorBuilder: (context, error, stackTrace) => Container(
+              width: 22,
+              height: 16,
+              color: Colors.grey.withOpacity(0.3),
+              child: const Icon(Icons.flag, size: 12, color: Colors.grey),
+            ),
             placeholderBuilder: (BuildContext context) => Container(
               width: 22,
               height: 16,
@@ -734,7 +810,7 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
       width: 22,
       height: 16,
       decoration: BoxDecoration(
-        color: Color(0xFF6B6B6B),
+        color: const Color(0xFF6B6B6B),
         borderRadius: BorderRadius.circular(2),
         border: Border.all(
           color: Colors.white.withOpacity(0.2),

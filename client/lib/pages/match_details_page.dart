@@ -21,7 +21,7 @@ class MatchDetailsPage extends StatefulWidget {
   final String? player2Id;
 
   const MatchDetailsPage({
-    Key? key,
+    super.key,
     this.matchData,
     this.matchId,
     this.tournamentId,
@@ -35,8 +35,7 @@ class MatchDetailsPage extends StatefulWidget {
     this.typeMatch,
     this.inputSetScores,
   })  : assert(matchData != null ||
-            (matchId != null && tournamentId != null && year != null)),
-        super(key: key);
+            (matchId != null && tournamentId != null && year != null));
 
   @override
   State<MatchDetailsPage> createState() => _MatchDetailsPageState();
@@ -84,8 +83,8 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
         final url = widget.matchId ?? '';
         final matchStats = await ApiService.getWTAMatchStats(
             'https://www.wtatennis.com/tournaments/${widget.tournamentId}/strasbourg/${widget.year}/scores/${widget.matchId}',
-            widget.tournamentId ?? "",
-            widget.matchId ?? "");
+            widget.tournamentId ?? '',
+            widget.matchId ?? '');
         setState(() {
           _matchData = matchStats;
           _isLoading = false;
@@ -97,20 +96,36 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
 
         final url =
             'https://www.atptour.com/-/Hawkeye/MatchStats/$year/$tournamentId/$matchId';
-        final response = await http.get(Uri.parse(url));
+        try {
+          final response = await http.get(Uri.parse(url));
 
-        if (response.statusCode == 200) {
-          final data = json.decode(response.body);
+          if (response.statusCode == 200) {
+            final data = json.decode(response.body);
 
-          setState(() {
-            _matchData = data;
-            _isLoading = false;
-          });
-        } else {
-          setState(() {
-            _isLoading = false;
-            _errorMessage = '加载失败: HTTP ${response.statusCode}';
-          });
+            setState(() {
+              _matchData = data;
+              _isLoading = false;
+            });
+          } else {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '加载失败: HTTP ${response.statusCode}';
+            });
+          }
+        } catch (e) {
+          debugPrint('HTTP request failed: $e');
+          // 如果是SSL证书问题，尝试使用代理或其他方法
+          if (e.toString().contains('CERTIFICATE_VERIFY_FAILED')) {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = 'SSL证书验证失败，请检查网络连接';
+            });
+          } else {
+            setState(() {
+              _isLoading = false;
+              _errorMessage = '加载失败: $e';
+            });
+          }
         }
       }
     } catch (e) {
@@ -271,10 +286,10 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
       player1Country = player2['PlayerCountry'];
       player2Country = player1['PlayerCountry'];
     }
-    debugPrint('Player1 Image URL: ${player1ImageUrl}');
-    debugPrint('Player2 Image URL: ${player2ImageUrl}');
-    debugPrint('Player1 Flag URL: ${player1FlagUrl}');
-    debugPrint('Player2 Flag URL: ${player2FlagUrl}');
+    debugPrint('Player1 Image URL: $player1ImageUrl');
+    debugPrint('Player2 Image URL: $player2ImageUrl');
+    debugPrint('Player1 Flag URL: $player1FlagUrl');
+    debugPrint('Player2 Flag URL: $player2FlagUrl');
 
     final player1Sets = playerTeam['SetScores'];
     final player2Sets = opponentTeam['SetScores'];
@@ -315,8 +330,8 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
         ),
       );
     }
-    debugPrint('player1Sets: ${player1Sets}');
-    debugPrint('player2Sets: ${player2Sets}');
+    debugPrint('player1Sets: $player1Sets');
+    debugPrint('player2Sets: $player2Sets');
     // 球员2信息
 
     final player2FirstName = player2['PlayerFirstName'];
@@ -357,7 +372,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
     if (widget.inputSetScores != null && widget.inputSetScores!.isNotEmpty) {
       for (int i = 0; i < widget.inputSetScores!['player1']!.length; i++) {
         if (widget.inputSetScores!['player1']?[i] != 0) {
-          debugPrint('player1 ${widget.player1Id} ${player1Id} ');
+          debugPrint('player1 ${widget.player1Id} $player1Id ');
           if (widget.player1Id.toString().toLowerCase() ==
               player1Id.toString().toLowerCase()) {
             int score1 = widget.inputSetScores!['player1']![i];
@@ -628,6 +643,12 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                                     player1FlagUrl,
                                     width: 16,
                                     height: 12,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      width: 16,
+                                      height: 12,
+                                      color: Colors.grey.withOpacity(0.3),
+                                      child: const Icon(Icons.flag, size: 8, color: Colors.grey),
+                                    ),
                                   ),
                                 ),
                               Text(
@@ -667,7 +688,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                                       ),
                                     ),
                                     // 显示抢七小分
-                                    if (player1TiebreakList.length > 0 &&
+                                    if (player1TiebreakList.isNotEmpty &&
                                         player1TiebreakList[0].isNotEmpty)
                                       Text(
                                         '(${player1TiebreakList[0]})',
@@ -711,7 +732,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                                       ),
                                     ),
                                     // 显示抢七小分
-                                    if (player2TiebreakList.length > 0 &&
+                                    if (player2TiebreakList.isNotEmpty &&
                                         player2TiebreakList[0].isNotEmpty)
                                       Text(
                                         '(${player2TiebreakList[0]})',
@@ -1112,6 +1133,12 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                                     player2FlagUrl,
                                     width: 16,
                                     height: 12,
+                                    errorBuilder: (context, error, stackTrace) => Container(
+                                      width: 16,
+                                      height: 12,
+                                      color: Colors.grey.withOpacity(0.3),
+                                      child: const Icon(Icons.flag, size: 8, color: Colors.grey),
+                                    ),
                                   ),
                                 ),
                               Text(
@@ -1160,7 +1187,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
       padding: const EdgeInsets.all(8),
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
       decoration: BoxDecoration(
-        color: Color(0xFF0C0D0C),
+        color: const Color(0xFF0C0D0C),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -2003,7 +2030,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
     final player2Width =
         totalWidth / 2 * (player1Total > 0 ? (player2Value / player2Total) : 0);
     debugPrint(
-        '$title $player1Width \ $player1Total \ $player2Width \ $player2Total');
+        '$title $player1Width  $player1Total  $player2Width  $player2Total');
     final bool isYtdData = _currentStatsPage == 1;
     final bool isCountData = title.contains('ACE') ||
         title.contains('Double') ||
@@ -2044,7 +2071,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                     ),
                   ),
                   Text(
-                    '(${player1Value}/${player1Total})',
+                    '($player1Value/$player1Total)',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.7),
                       fontSize: 10,
