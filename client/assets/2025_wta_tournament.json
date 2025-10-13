@@ -2260,7 +2260,7 @@
       "endDate": "2025-09-14",
       "surface": "Hard",
       "inOutdoor": "O",
-      "city": "SAO PAULO",
+      "city": "SAO-PAULO",
       "country": "BRAZIL",
       "singlesDrawSize": 32,
       "doublesDrawSize": 16,
@@ -2268,7 +2268,7 @@
       "prizeMoneyCurrency": "USD",
       "liveScoringId": "1139",
       "winners": [],
-      "TournamentImage": null
+      "TournamentImage":  "https://photoresources.wtatennis.com/photo-resources/2025/09/05/1fde5505-0b7c-4fc6-8088-0d8f8c9a9d43/1139-Sao-Poalo.jpg?width=1500&height=520"
     },
     {
       "tournamentGroup": {

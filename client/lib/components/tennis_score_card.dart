@@ -866,8 +866,8 @@ class TennisScoreCard extends StatelessWidget {
       int playerScore, int opponentScore, int playerTie, int opponentTie,
       {bool isPlayer1 = true}) {
     // 直接查找此列的索引
-    debugPrint(
-        'playerScore: $playerScore, opponentScore: $opponentScore,playerTie: $playerTie, opponentTie: $opponentTie');
+    // debugPrint(
+    //     'playerScore: $playerScore, opponentScore: $opponentScore,playerTie: $playerTie, opponentTie: $opponentTie');
 
     // 抢七情况的处理
     bool isStandardTiebreak = (playerTie != 0 || opponentTie != 0) ||
@@ -876,7 +876,7 @@ class TennisScoreCard extends StatelessWidget {
     bool isExtendedTiebreak = (playerTie > 7 || opponentTie > 7);
 
     // 判断是否显示小分
-    debugPrint('isStandardTiebreak: $isStandardTiebreak');
+    // debugPrint('isStandardTiebreak: $isStandardTiebreak');
     // 标准抢七(7-6)：小分显示在输的一方
     if (isStandardTiebreak) {
       bool isLosingPlayer = playerScore < opponentScore;

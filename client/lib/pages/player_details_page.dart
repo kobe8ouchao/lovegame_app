@@ -39,6 +39,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
   String _height = '';
   String _turnedPro = '';
   String _birthplace = '';
+  String _birthday = '';
   String _plays = '';
   String _backhand = '';
   String _coach = '';
@@ -75,7 +76,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
       // 根据类型调用不同的 API
       Map<String, dynamic> data;
       if (widget.type == 'wta') {
-        data = await ApiService.getWTAPlayerDetails(widget.playerId,
+        data = await ApiService.getWTAPlayerDetailsFromUSOpen(widget.playerId,
             "${widget.playerName.split(' ').first.toLowerCase()}-${widget.playerName.split(' ')[1].toLowerCase()}");
       } else {
         data = await ApiService.getPlayerDetails(widget.playerId);
@@ -96,73 +97,173 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
   }
 
   void _parsePlayerData(Map<String, dynamic> data) {
-    // 从JSON数据中提取信息
-    _rank = data['SglRank']?.toString() ?? '';
-    _rankMove = '${data['SglRankMove'] ?? 0}';
+    try {
+      debugPrint('开始解析球员数据: ${data.keys.toList()}');
+      debugPrint('数据内容: $data');
 
-    // 胜负记录
-    _ytdWins = data['SglYtdWon'] ?? 0;
-    _ytdLosses = data['SglYtdLost'] ?? 0;
-    _ytdWinLoss = '$_ytdWins / $_ytdLosses';
+      // 从JSON数据中提取信息
+      _rank = data['SglRank']?.toString() ?? '';
+      _rankMove = '${data['SglRankMove'] ?? 0}';
 
-    final sglCareerWon = data['SglCareerWon'] ?? 0;
-    final sglCareerLost = data['SglCareerLost'] ?? 0;
-    _careerWinLoss = '$sglCareerWon / $sglCareerLost';
-
-    // 冠军数
-    _ytdTitles = data['SglYtdTitles']?.toString() ?? '0';
-    _careerTitles = data['SglCareerTitles']?.toString() ?? '0';
-
-    // 最高排名
-    _careerHighRank = data['SglHiRank']?.toString() ?? '';
-    _careerHighRankDate = data['SglHiRankDate'] != null
-        ? DateTime.parse(data['SglHiRankDate']).year.toString()
-        : '';
-
-    // 个人信息
-    final birthDate =
-        data['BirthDate'] != null ? DateTime.parse(data['BirthDate']) : null;
-    _age = data['Age']?.toString() ?? '';
-
-    // 转换单位为公制，但保留原始数据
-    final weightLbs = data['WeightLb'] != null
-        ? int.tryParse(data['WeightLb'].toString()) ?? 0
-        : 0;
-    final weightKg = (weightLbs * 0.453592).round(); // 磅转公斤
-    _weight = weightKg > 0 ? '$weightKg' : '';
-
-    // 身高转换为厘米，但保留原始数据
-    final heightFt = data['HeightFt'] ?? '';
-    if (heightFt.isNotEmpty && heightFt.contains("'")) {
-      try {
-        final parts = heightFt.split("'");
-        final feet = int.tryParse(parts[0].trim()) ?? 0;
-        final inches = int.tryParse(parts[1].replaceAll('"', '').trim()) ?? 0;
-        final totalCm = ((feet * 30.48) + (inches * 2.54)).round();
-        _height = '$totalCm cm';
-      } catch (e) {
-        _height = heightFt;
+      // 胜负记录
+      _ytdWins = 0;
+      if (data['SglYtdWon'] != null) {
+        if (data['SglYtdWon'] is int) {
+          _ytdWins = data['SglYtdWon'];
+        } else if (data['SglYtdWon'] is double) {
+          _ytdWins = data['SglYtdWon'].toInt();
+        } else if (data['SglYtdWon'] is String) {
+          _ytdWins = int.parse(data['SglYtdWon']);
+        }
       }
-    } else {
-      _height = heightFt;
-    }
+      _ytdLosses = 0;
+      if (data['SglYtdLost'] != null) {
+        if (data['SglYtdLost'] is int) {
+          _ytdLosses = data['SglYtdLost'];
+        } else if (data['SglYtdLost'] is double) {
+          _ytdLosses = data['SglYtdLost'].toInt();
+        } else if (data['SglYtdLost'] is String) {
+          _ytdLosses = int.parse(data['SglYtdLost']);
+        }
+      }
+      _ytdWinLoss = '$_ytdWins / $_ytdLosses';
+      int sglCareerWon = 0;
+      if (data['SglCareerWon'] != null) {
+        if (data['SglCareerWon'] is int) {
+          sglCareerWon = data['SglCareerWon'];
+        } else if (data['SglCareerWon'] is double) {
+          sglCareerWon = data['SglCareerWon'].toInt();
+        } else if (data['SglCareerWon'] is String) {
+          sglCareerWon = int.parse(data['SglCareerWon']);
+        }
+      }
+      int sglCareerLost = 0;
+      if (data['SglCareerLost'] != null) {
+        if (data['SglCareerLost'] is int) {
+          sglCareerLost = data['SglCareerLost'];
+        } else if (data['SglCareerLost'] is double) {
+          sglCareerLost = data['SglCareerLost'].toInt();
+        } else if (data['SglCareerLost'] is String) {
+          sglCareerLost = int.parse(data['SglCareerLost']);
+        }
+      }
+      _careerWinLoss = '$sglCareerWon / $sglCareerLost';
 
-    _turnedPro = data['ProYear']?.toString() ?? '';
-    _birthplace = data['BirthCity'] ?? '';
-    if (data['BirthCountry'] != null) {
-      _birthplace += ', ${data['BirthCountry']}';
-    }
+      // 冠军数
+      _ytdTitles = '0';
+      if (data['SglYtdTitles'] != null) {
+        if (data['SglYtdTitles'] is int) {
+          _ytdTitles = data['SglYtdTitles'].toString();
+        } else if (data['SglYtdTitles'] is double) {
+          _ytdTitles = data['SglYtdTitles'].toInt().toString();
+        } else if (data['SglYtdTitles'] is String) {
+          _ytdTitles = data['SglYtdTitles'];
+        }
+      }
+      _careerTitles = '0';
+      if (data['SglCareerTitles'] != null) {
+        if (data['SglCareerTitles'] is int) {
+          _careerTitles = data['SglCareerTitles'].toString();
+        } else if (data['SglCareerTitles'] is double) {
+          _careerTitles = data['SglCareerTitles'].toInt().toString();
+        } else if (data['SglCareerTitles'] is String) {
+          _careerTitles = data['SglCareerTitles'];
+        }
+      }
 
-    _nationality = data['Nationality'] ?? widget.playerCountry;
-    debugPrint('Counntry: $_nationality');
-    // 打法
-    _plays = data['PlayHand']?['Description'] ?? 'Right-Handed';
-    _backhand = data['BackHand']?['Description'] ?? 'Two-Handed';
-    //奖金
-    _SglYtdPrizeFormatted = data['SglYtdPrizeFormatted'] ?? '--';
-    _CareerPrizeFormatted = data['CareerPrizeFormatted'] ?? '--';
-    _coach = data['Coach'] ?? '';
-    _headshot = data['ImageUrl'] ?? '';
+      // 最高排名
+      _careerHighRank = '0';
+      if (data['SglHiRank'] != null) {
+        if (data['SglHiRank'] is int) {
+          _careerHighRank = data['SglHiRank'].toString();
+        } else if (data['SglHiRank'] is double) {
+          _careerHighRank = data['SglHiRank'].toInt().toString();
+        } else if (data['SglHiRank'] is String) {
+          _careerHighRank = data['SglHiRank'];
+        }
+      }
+      // _careerHighRankDate = data['SglHiRankDate'] != null
+      //     ? DateTime.parse(data['SglHiRankDate']).year.toString()
+      //     : '';
+
+      // 个人信息
+      _birthday = data['BirthDate'] ?? '-';
+      _age = data['Age']?.toString() ?? '';
+
+      // 转换单位为公制，但保留原始数据
+      final weightLbs = data['WeightLb'] != null
+          ? double.tryParse(data['WeightLb'].toString()) ?? 0
+          : 0;
+      final weightKg = (weightLbs * 0.453592).round(); // 磅转公斤
+      _weight = weightKg > 0 ? '$weightKg' : '';
+
+      // 身高转换为厘米，但保留原始数据
+      final heightFt = data['HeightFt'] ?? '5 ft.4 in';
+      _height = data['HeightCM'] ?? '1.69m';
+      if (heightFt.isNotEmpty && heightFt.contains("'")) {
+        try {
+          final parts = heightFt.split("'");
+          final feet = double.tryParse(parts[0].trim()) ?? 0;
+          final inches =
+              double.tryParse(parts[1].replaceAll('"', '').trim()) ?? 0;
+          final totalCm = ((feet * 30.48) + (inches * 2.54)).round();
+          _height = '$totalCm cm';
+        } catch (e) {
+          debugPrint('身高解析错误: $e');
+          _height = data['HeightCM'] ?? '1.60m';
+        }
+      } else {
+        _height = data['HeightCM'] ?? '1.60m';
+      }
+
+      _turnedPro = data['ProYear']?.toString() ?? '';
+      _birthplace = data['BirthCity'] ?? '';
+      if (data['BirthCountry'] != null) {
+        _birthplace += ', ${data['BirthCountry']}';
+      }
+
+      _nationality = data['Nationality'] ?? widget.playerCountry;
+      debugPrint('Country: $_nationality');
+
+      // 打法
+      _plays = data['PlayHand']?['Description'] ?? 'Right-Handed';
+      _backhand = data['BackHand']?['Description'] ?? 'Two-Handed';
+
+      //奖金
+      _SglYtdPrizeFormatted = data['SglYtdPrizeFormatted'] ?? '--';
+      _CareerPrizeFormatted = data['CareerPrizeFormatted'] ?? '--';
+      _coach = data['Coach'] ?? '';
+      _headshot = data['ImageUrl'] ?? '';
+
+      debugPrint('球员数据解析完成');
+    } catch (e) {
+      debugPrint('解析球员数据时出错: $e');
+      debugPrint('错误数据: $data');
+
+      // 设置默认值，防止UI显示异常
+      _rank = '';
+      _rankMove = '0';
+      _ytdWins = 0;
+      _ytdLosses = 0;
+      _ytdWinLoss = '0 / 0';
+      _careerWinLoss = '0 / 0';
+      _ytdTitles = '0';
+      _careerTitles = '0';
+      _careerHighRank = '';
+      _careerHighRankDate = '';
+      _age = '';
+      _weight = '';
+      _height = '';
+      _turnedPro = '';
+      _birthplace = '';
+      _nationality = widget.playerCountry;
+      _plays = 'Right-Handed';
+      _backhand = 'Two-Handed';
+      _SglYtdPrizeFormatted = '--';
+      _CareerPrizeFormatted = '--';
+      _coach = '';
+      _headshot = '';
+    }
   }
 
   @override
@@ -280,8 +381,8 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
               child: widget.type == 'wta'
                   ? Image.network(
                       _headshot,
-                      fit: BoxFit.cover, // 使用cover而不是contain，确保填充整个区域
-                      alignment: Alignment.topRight, // 改为顶部对齐，确保显示上半身
+                      fit: BoxFit.contain, // 使用cover而不是contain，确保填充整个区域
+                      alignment: Alignment.center, // 改为顶部对齐，确保显示上半身
                       errorBuilder: (context, error, stackTrace) {
                         return Container(
                           color: Colors.transparent,
@@ -289,7 +390,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
                       },
                     )
                   : Image.network(
-                      'https://atptour.com/-/media/alias/player-gladiator-headshot/${widget.playerId}',
+                      'https://www.atptour.com/-/media/alias/player-gladiator-headshot/${widget.playerId}',
                       fit: BoxFit.cover, // 使用cover而不是contain，确保填充整个区域
                       alignment: Alignment.topRight, // 改为顶部对齐，确保显示上半身
                       errorBuilder: (context, error, stackTrace) {
@@ -359,7 +460,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
                           )
                         : _playerData['ScRelativeUrlPlayerCountryFlag'] != null
                             ? SvgPicture.network(
-                                'https://atptour.com${_playerData['ScRelativeUrlPlayerCountryFlag']}',
+                                'https://www.atptour.com${_playerData['ScRelativeUrlPlayerCountryFlag']}',
                                 fit: BoxFit.cover,
                                 placeholderBuilder: (context) =>
                                     Container(color: Colors.grey),
@@ -485,7 +586,7 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
                 _buildDetailRow('Turned Pro', _turnedPro),
                 _buildDetailRow('Plays', _plays),
                 _buildDetailRow('Backhand', _backhand),
-                _buildDetailRow('Coach', _coach),
+                _buildDetailRow('BirthDate', _birthday),
                 _buildDetailRow('Social Media', ''),
               ],
             ),

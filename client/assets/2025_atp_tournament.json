@@ -1945,11 +1945,11 @@
           "ChallengerCategory": null,
           "startDate": "2025-09-12",
           "endDate": "2025-09-14",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/news/2024/09/08/16/17/de-minaur-davis-cup-2023-group-stage.jpg",
-          "tournamentImage2": null
+          "TournamentImage": "https://www.atptour.com/-/media/images/news/2022/10/31/08/11/atp-itf-davis-cup-graphic-2022.jpg",
+          "tournamentImage2": "https://www.atptour.com/-/media/images/news/2022/10/31/08/11/atp-itf-davis-cup-graphic-2022.jpg"
         },
         {
-          "Id": "7581",
+          "Id": "7581" ,
           "Name": "Chengdu Open",
           "Location": "Chengdu, China",
           "FormattedDate": "17 - 23 September, 2025",
@@ -2182,7 +2182,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-10-01",
           "endDate": "2025-10-12",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/atp-tournaments/tournament-images/shanghai_tournimage_2022.jpg",
+          "TournamentImage": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2023/10/11/d5a3aca4-4598-42d8-a197-182fd6d98c9a/AMBIENCE-SHANGHAIMASTERS-11102023-12818.jpg?width=1920&height=1080",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2023/10/11/d5a3aca4-4598-42d8-a197-182fd6d98c9a/AMBIENCE-SHANGHAIMASTERS-11102023-12818.jpg?height=527&width=1200"
         },
         {
@@ -2220,7 +2220,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-10-13",
           "endDate": "2025-10-19",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/news/2023/12/14/13/59/almaty_tournimage_2024.jpg",
+          "TournamentImage": "https://www.atptour.com/-/media/images/news/2023/12/14/13/59/almaty_tournimage_2024.jpg",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2023/12/15/267cd8fb-effc-4a6c-9739-91547549ed1d/GettyImages-588603321.jpg?height=527&width=1200"
         },
         {
@@ -2258,7 +2258,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-10-13",
           "endDate": "2025-10-19",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/atp-tournaments/tournament-images/stockholm_tournimage_2023.jpg",
+          "TournamentImage": "https://www.atptour.com/-/media/images/atp-tournaments/tournament-images/antwerp_tournimage_2019.jpg",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2024/10/21/3aec0936-6bbf-47ba-8383-8b5c037d7872/_28A9806.jpg?height=527&width=1200"
         },
         {
@@ -2296,7 +2296,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-10-13",
           "endDate": "2025-10-19",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/atp-tournaments/tournament-images/antwerp_tournimage_2019.jpg",
+          "TournamentImage": "https://www.atptour.com/-/media/images/atp-tournaments/tournament-images/stockholm_tournimage_2025.jpg",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2025/01/30/6f2d616a-ad3c-47a0-b491-dff8db4a7b95/GettyImages-1246672817.jpg?height=527&width=1200"
         },
         {
@@ -2334,7 +2334,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-10-20",
           "endDate": "2025-10-26",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/atp-tournaments/tournament-images/vienna_tournimage_2025.jpg",
+          "TournamentImage": "https://www.atptour.com/-/media/images/atp-tournaments/tournament-images/vienna_tournimage_2025.jpg",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2024/10/28/3ac24160-6db1-40c9-bb72-9a028a891a2e/GettyImages-2180392586.jpg?height=527&width=1200"
         },
         {
@@ -2410,7 +2410,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-10-27",
           "endDate": "2025-11-02",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/atp-tournaments/tournament-images/paris_tournimage_2019_v3.jpg",
+          "TournamentImage": "https://www.atptour.com/-/media/images/atp-tournaments/tournament-images/paris_tournimage_2019_v3.jpg",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2022/11/29/8b9185cb-eca1-41bd-aa1c-32625d46e0ed/GettyImages-1184845032.jpg?height=527&width=1200"
         }
       ],
@@ -2495,7 +2495,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-11-02",
           "endDate": "2025-11-08",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/atp-tournaments/tournament-images/metz_tournphoto_2019.jpg",
+          "TournamentImage": "https://www.atptour.com/-/media/images/atp-tournaments/tournament-images/metz_tournphoto_2019.jpg",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2021/11/05/d1133aa4-f246-4c91-95e2-4a37cc875065/GettyImages-1265235429.jpg?height=527&width=1200"
         },
         {
@@ -2533,7 +2533,7 @@
           "ChallengerCategory": null,
           "startDate": "2025-11-09",
           "endDate": "2025-11-16",
-          "TournamentImage": "https://www.atptour.com/-/media/2024-images/atp-tournaments/tournament-images/nitto-atp-finals_tournimage_2024.jpg",
+          "TournamentImage": "https://www.atptour.com/-/media/images/atp-tournaments/tournament-images/nitto-atp-finals_tournimage_2024.jpg",
           "tournamentImage2": "https://resources.prod.atpmedia.pulselive.com/photo-resources/2023/11/17/dadebea5-9fa0-4696-b7ef-e443244f4cd2/COR_6400.JPG?height=527&width=1200"
         },
         {
@@ -2572,7 +2572,7 @@
           "startDate": "2025-11-18",
           "endDate": "2025-11-23",
           "TournamentImage": "https://www.atptour.com/-/media/2024-images/news/2024/11/24/19/54/italy-davis-cup-2024-trophy-shot.jpg",
-          "tournamentImage2": null
+          "tournamentImage2": "https://www.atptour.com/-/media/images/news/2022/10/31/08/11/atp-itf-davis-cup-graphic-2022.jpg"
         }
       ],
       "month": 11,

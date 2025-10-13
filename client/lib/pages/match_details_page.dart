@@ -19,6 +19,7 @@ class MatchDetailsPage extends StatefulWidget {
   final Map<String, List<int>>? inputSetScores;
   final String? player1Id;
   final String? player2Id;
+  final String? gs;
 
   const MatchDetailsPage({
     super.key,
@@ -34,7 +35,8 @@ class MatchDetailsPage extends StatefulWidget {
     this.player2Id,
     this.typeMatch,
     this.inputSetScores,
-  })  : assert(matchData != null ||
+    this.gs,
+  }) : assert(matchData != null ||
             (matchId != null && tournamentId != null && year != null));
 
   @override
@@ -90,41 +92,104 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
           _isLoading = false;
         });
       } else {
-        final year = widget.year ?? '2025';
-        final tournamentId = widget.tournamentId ?? '1536';
-        final matchId = widget.matchId ?? 'ms011';
+        if (widget.gs == 'usopen') {
+          final year = widget.year ?? '2025';
+          final matchId = widget.matchId ?? '';
+          final url =
+              'https://www.usopen.org/en_US/scores/feeds/$year/matches/complete/$matchId.json';
 
-        final url =
-            'https://www.atptour.com/-/Hawkeye/MatchStats/$year/$tournamentId/$matchId';
-        try {
-          final response = await http.get(Uri.parse(url));
+          try {
+            final response = await http.get(Uri.parse(url));
+            if (response.statusCode == 200) {
+              final data = json.decode(response.body);
+              final matchInfo = data['matches'][0];
 
-          if (response.statusCode == 200) {
-            final data = json.decode(response.body);
+              // Transform usopen data to the structure expected by the UI
+              final formattedData = {
+                'Tournament': {
+                  'TournamentCity': 'New York',
+                  'EventCountry': 'USA',
+                  'TournamentName': 'US Open',
+                  'TournamentId': widget.tournamentId,
+                },
+                'Match': {
+                  'RoundName': matchInfo['roundName'],
+                  'MatchStatus': matchInfo['statusCode'] == 'D' ? 'F' : 'L',
+                  'PlayerTeam': {
+                    'Player': {
+                      'PlayerFirstName': matchInfo['team1']['firstNameA'],
+                      'PlayerLastName': matchInfo['team1']['lastNameA'],
+                      'PlayerId': matchInfo['team1']['idA'],
+                      'PlayerCountry': matchInfo['team1']['nationA'],
+                    },
+                    'SetScores': _buildSetScores(matchInfo, 1),
+                  },
+                  'OpponentTeam': {
+                    'Player': {
+                      'PlayerFirstName': matchInfo['team2']['firstNameA'],
+                      'PlayerLastName': matchInfo['team2']['lastNameA'],
+                      'PlayerId': matchInfo['team2']['idA'],
+                      'PlayerCountry': matchInfo['team2']['nationA'],
+                    },
+                    'SetScores': _buildSetScores(matchInfo, 2),
+                  },
+                },
+              };
 
+              setState(() {
+                _matchData = formattedData;
+                _isLoading = false;
+              });
+            } else {
+              setState(() {
+                _isLoading = false;
+                _errorMessage =
+                    'Failed to load data: HTTP ${response.statusCode}';
+              });
+            }
+          } catch (e) {
             setState(() {
-              _matchData = data;
               _isLoading = false;
-            });
-          } else {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = '加载失败: HTTP ${response.statusCode}';
+              _errorMessage = 'Failed to load data: $e';
             });
           }
-        } catch (e) {
-          debugPrint('HTTP request failed: $e');
-          // 如果是SSL证书问题，尝试使用代理或其他方法
-          if (e.toString().contains('CERTIFICATE_VERIFY_FAILED')) {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = 'SSL证书验证失败，请检查网络连接';
-            });
-          } else {
-            setState(() {
-              _isLoading = false;
-              _errorMessage = '加载失败: $e';
-            });
+        } else {
+          final year = widget.year ?? '2025';
+          final tournamentId = widget.tournamentId ?? '1536';
+          final matchId = widget.matchId ?? 'ms011';
+
+          final url =
+              'https://www.atptour.com/-/Hawkeye/MatchStats/$year/$tournamentId/$matchId';
+          try {
+            final response = await http.get(Uri.parse(url));
+
+            if (response.statusCode == 200) {
+              final data = json.decode(response.body);
+
+              setState(() {
+                _matchData = data;
+                _isLoading = false;
+              });
+            } else {
+              setState(() {
+                _isLoading = false;
+                _errorMessage = '加载失败: HTTP ${response.statusCode}';
+              });
+            }
+          } catch (e) {
+            debugPrint('HTTP request failed: $e');
+            // 如果是SSL证书问题，尝试使用代理或其他方法
+            if (e.toString().contains('CERTIFICATE_VERIFY_FAILED')) {
+              setState(() {
+                _isLoading = false;
+                _errorMessage = 'SSL证书验证失败，请检查网络连接';
+              });
+            } else {
+              setState(() {
+                _isLoading = false;
+                _errorMessage = '加载失败: $e';
+              });
+            }
           }
         }
       }
@@ -134,6 +199,60 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
         _errorMessage = '加载失败: $e';
       });
     }
+  }
+
+  List<Map<String, dynamic>> _buildSetScores(
+      Map<String, dynamic> matchInfo, int team) {
+    List<Map<String, dynamic>> setScores = [];
+    final scores = matchInfo['scores']['sets'];
+    final stats = matchInfo['base_stats'];
+
+    // Overall stats
+    Map<String, dynamic> overallStats = {};
+    if (stats != null && stats['match'] != null) {
+      final teamStats = stats['match']['team_$team'];
+      overallStats = {
+        'Aces': teamStats['t_ace'],
+        'DoubleFaults': teamStats['df'],
+        'FirstServeIn': teamStats['t_f_srv_in'],
+        'FirstServeTotal': teamStats['t_f_srv'],
+        'FirstServeWon': teamStats['t_f_srv_w'],
+        'SecondServeWon': teamStats['t_s_srv_w'],
+        'SecondServeTotal': teamStats['t_s_srv'],
+        'BreakPointsWon': teamStats['t_bp_w'],
+        'BreakPointsTotal': teamStats['t_bp'],
+        'TotalPointsWon': teamStats['t_p_w_opp_srv'],
+      };
+    }
+    setScores.add({'Stats': overallStats});
+
+    for (int i = 0; i < scores.length; i++) {
+      final set = scores[i];
+      final teamIndex = team - 1;
+      Map<String, dynamic> setStat = {};
+      if (stats != null && stats['set_${i + 1}'] != null) {
+        final teamSetStats = stats['set_${i + 1}']['team_$team'];
+        setStat = {
+          'Aces': teamSetStats['t_ace'],
+          'DoubleFaults': teamSetStats['df'],
+          'FirstServeIn': teamSetStats['t_f_srv_in'],
+          'FirstServeTotal': teamSetStats['t_f_srv'],
+          'FirstServeWon': teamSetStats['t_f_srv_w'],
+          'SecondServeWon': teamSetStats['t_s_srv_w'],
+          'SecondServeTotal': teamSetStats['t_s_srv'],
+          'BreakPointsWon': teamSetStats['t_bp_w'],
+          'BreakPointsTotal': teamSetStats['t_bp'],
+          'TotalPointsWon': teamSetStats['t_p_w_opp_srv'],
+        };
+      }
+      setScores.add({
+        'SetScore': int.tryParse(set[teamIndex]['score'] ?? '0'),
+        'TieBreakScore': int.tryParse(set[teamIndex]['tiebreak'] ?? '0'),
+        'Stats': setStat,
+      });
+    }
+
+    return setScores;
   }
 
   String _formatPlayerName(String name) {
@@ -286,10 +405,6 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
       player1Country = player2['PlayerCountry'];
       player2Country = player1['PlayerCountry'];
     }
-    debugPrint('Player1 Image URL: $player1ImageUrl');
-    debugPrint('Player2 Image URL: $player2ImageUrl');
-    debugPrint('Player1 Flag URL: $player1FlagUrl');
-    debugPrint('Player2 Flag URL: $player2FlagUrl');
 
     final player1Sets = playerTeam['SetScores'];
     final player2Sets = opponentTeam['SetScores'];
@@ -643,11 +758,14 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                                     player1FlagUrl,
                                     width: 16,
                                     height: 12,
-                                    errorBuilder: (context, error, stackTrace) => Container(
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container(
                                       width: 16,
                                       height: 12,
                                       color: Colors.grey.withOpacity(0.3),
-                                      child: const Icon(Icons.flag, size: 8, color: Colors.grey),
+                                      child: const Icon(Icons.flag,
+                                          size: 8, color: Colors.grey),
                                     ),
                                   ),
                                 ),
@@ -1133,11 +1251,14 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                                     player2FlagUrl,
                                     width: 16,
                                     height: 12,
-                                    errorBuilder: (context, error, stackTrace) => Container(
+                                    errorBuilder:
+                                        (context, error, stackTrace) =>
+                                            Container(
                                       width: 16,
                                       height: 12,
                                       color: Colors.grey.withOpacity(0.3),
-                                      child: const Icon(Icons.flag, size: 8, color: Colors.grey),
+                                      child: const Icon(Icons.flag,
+                                          size: 8, color: Colors.grey),
                                     ),
                                   ),
                                 ),
@@ -2070,13 +2191,21 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  Text(
-                    '($player1Value/$player1Total)',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 10,
-                    ),
-                  ),
+                  isCountData
+                      ? Text(
+                          '($player1Value/$player1Total)',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 10,
+                          ),
+                        )
+                      : Text(
+                          '',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 10,
+                          ),
+                        ),
                 ],
               ),
             ),

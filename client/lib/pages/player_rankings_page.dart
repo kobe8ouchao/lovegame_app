@@ -611,9 +611,9 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                     urlHeadshotImage.isNotEmpty
                         ? urlHeadshotImage.startsWith('http')
                             ? urlHeadshotImage
-                            : 'https://atptour.com$urlHeadshotImage'
+                            : 'https://www.atptour.com$urlHeadshotImage'
                         : _showATP
-                            ? 'https://atptour.com/-/media/alias/player-headshot/default-player-headshot.png'
+                            ? 'https://www.atptour.com/-/media/alias/player-headshot/default-player-headshot.png'
                             : 'https://www.atptour.com/assets/tournament/assets/headshot_placeholder.jpg',
                     width: 40,
                     height: 40,

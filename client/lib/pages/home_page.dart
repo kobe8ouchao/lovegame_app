@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:LoveGame/pages/gs_match_detail_page.dart';
 import 'package:LoveGame/pages/settings_page.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -8,6 +9,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../components/tennis_calendar.dart';
 import '../components/glass_icon_button.dart';
@@ -46,8 +48,9 @@ class _HomePageState extends State<HomePage> {
   String _selectedDateStr = '';
   List<Map<String, dynamic>> _currentTournaments = [];
   List<String> imageBanners = [
-    'https://images.unsplash.com/photo-1465125672495-63cdc2fa22ed?q=80&w=2940&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
-    'https://images.unsplash.com/photo-1545151414-8a948e1ea54f?q=80&w=3087&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D',
+    'https://images.unsplash.com/photo-1568060835183-1ab3240b1008?q=80&w=2064&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1751275061697-0f3aede33696?q=80&w=1740&auto=format&fit=crop',
+    'https://images.unsplash.com/photo-1545151414-8a948e1ea54f?q=80&w=3087&auto=format&fit=crop',
     'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=1920&auto=format&fit=crop',
   ];
   int _currentImageIndex = 0;
@@ -133,6 +136,7 @@ class _HomePageState extends State<HomePage> {
     try {
       // 加载本地比赛数据
       final tournamentData = await ApiService.loadLocalTournamentData();
+
       final DateTime now = selectedDate; // 使用选择的日期而不是当前日期
 
       _currentTournaments = [];
@@ -163,38 +167,169 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _saveWTAMatchesToLocalStorage(
+      String dateKey, List<Map<String, dynamic>> matches) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dataString = json.encode(matches);
+      await prefs.setString('wta_matches_$dateKey', dataString);
+
+      // 设置数据过期时间（例如7天后过期）
+      final expirationTime = DateTime.now().add(const Duration(days: 7));
+      await prefs.setString(
+          'wta_matches_${dateKey}_expiry', expirationTime.toIso8601String());
+
+      debugPrint('WTA比赛数据已保存到本地存储: $dateKey');
+    } catch (e) {
+      debugPrint('保存WTA数据到本地存储失败: $e');
+    }
+  }
+
+  // 从本地存储获取WTA比赛数据
+  Future<List<Map<String, dynamic>>?> _getWTAMatchesFromLocalStorage(
+      String dateKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedDataString = prefs.getString('wta_matches_$dateKey');
+
+      if (cachedDataString != null) {
+        final List<dynamic> cachedList = json.decode(cachedDataString);
+        return cachedList.cast<Map<String, dynamic>>();
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('从本地存储获取WTA数据失败: $e');
+      return null;
+    }
+  }
+
   Future<void> _loadWTA() async {
+    try {
+      // 获取今天的日期（只保留年月日）
+      final today = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final selectedDay =
+          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+      // 如果不是今天日期且是过去日期，尝试从本地存储获取数据
+      if (selectedDay.isBefore(today)) {
+        debugPrint('检查本地存储的WTA比赛数据: $_selectedDateStr');
+
+        // 尝试从本地存储获取数据
+        final cachedData =
+            await _getWTAMatchesFromLocalStorage(_selectedDateStr);
+
+        if (cachedData != null && cachedData.isNotEmpty) {
+          debugPrint('从本地存储获取到WTA数据，数量: ${cachedData.length}');
+
+          // 将本地存储的数据转换为应用所需的格式
+          List<Map<String, dynamic>> formattedMatches = [];
+          for (var match in cachedData) {
+            // WTA数据格式转换
+            formattedMatches.add({
+              'player1': match['player1'] ?? '',
+              'player2': match['player2'] ?? '',
+              'player1Rank': match['player1Rank'] ?? '',
+              'player2Rank': match['player2Rank'] ?? '',
+              'player1Country': match['player1Country'] ?? '',
+              'player2Country': match['player2Country'] ?? '',
+              'player1FlagUrl': match['player1FlagUrl'] ?? '',
+              'player2FlagUrl': match['player2FlagUrl'] ?? '',
+              'player2ImageUrl': match['player2ImageUrl'] ?? '',
+              'player1ImageUrl': match['player1ImageUrl'] ?? '',
+              'serving1': match['serving1'] ?? false,
+              'serving2': match['serving2'] ?? false,
+              'roundInfo': match['roundInfo'] ?? '',
+              'stadium': match['stadium'] ?? '',
+              'matchTime': match['matchTime'] ?? '',
+              'player1SetScores': match['player1SetScores'] ?? [],
+              'player2SetScores': match['player2SetScores'] ?? [],
+              'player1TiebreakScores': match['player1TiebreakScores'] ?? [],
+              'player2TiebreakScores': match['player2TiebreakScores'] ?? [],
+              'currentGameScore1': match['currentGameScore1'] ?? '',
+              'currentGameScore2': match['currentGameScore2'] ?? '',
+              'isPlayer1Winner': match['isPlayer1Winner'] ?? false,
+              'isPlayer2Winner': match['isPlayer2Winner'] ?? false,
+              'matchType': match['matchType'] ?? 'completed',
+              'tournamentName': match['tournamentName'] ?? '',
+              'matchId': match['matchId'] ?? '',
+              'tournamentId': match['tournamentId'] ?? '',
+              'year': match['year'] ?? '',
+              'typePlayer': match['typePlayer'] ?? 'wta',
+              'player1Id': match['player1Id'] ?? '',
+              'player2Id': match['player2Id'] ?? '',
+              'isLive': match['isLive'] ?? false,
+              'matchDuration': match['matchDuration'] ?? '',
+            });
+          }
+
+          setState(() {
+            _displayedWTAMatches = formattedMatches;
+          });
+
+          return;
+        } else {
+          debugPrint('本地存储无WTA数据，开始网络请求');
+        }
+      }
+
+      // 如果是今天或者本地存储没有数据，进行网络请求
+      await _loadWTAFromNetwork();
+    } catch (e) {
+      print('获取WTA赛事时出错: $e');
+      setState(() {
+        _displayedWTAMatches = [];
+      });
+    }
+  }
+
+// 从网络加载WTA比赛数据（原有逻辑）
+  Future<void> _loadWTAFromNetwork() async {
     try {
       // 获取当前日期的WTA赛事
       final tournaments = await getCurrentWTATournaments(selectedDate);
 
       if (tournaments.isEmpty) {
         setState(() {
-          _isLoading = false;
+          _displayedWTAMatches = [];
         });
         return;
       }
+
       List<Map<String, dynamic>> wtaMatches = [];
-      debugPrint('tou>>>>>>rnamet ${tournaments.length}');
+      debugPrint('tournament数量: ${tournaments.length}');
+
       // 遍历所有赛事，获取比赛数据
       for (var tournament in tournaments) {
         try {
           var wtaMatchesByDate0 =
               await ApiService.getWTAMatches(tournament, selectedDate);
           wtaMatches.addAll(wtaMatchesByDate0);
-          debugPrint('wtaMatchesByDate0 ===== ${wtaMatchesByDate0.length}');
+          debugPrint('wtaMatchesByDate0数量: ${wtaMatchesByDate0.length}');
         } catch (e) {
           debugPrint('获取WTA比赛数据失败: $e');
         }
       }
-      // 转换为Map<String, dynamic>
-      Map<String, dynamic> wtaMatchesByDate = {_selectedDateStr: wtaMatches};
+
+      // 保存数据到本地存储（只保存过去日期的数据）
+      final today = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final selectedDay =
+          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+      if (selectedDay.isBefore(today) && wtaMatches.isNotEmpty) {
+        await _saveWTAMatchesToLocalStorage(_selectedDateStr, wtaMatches);
+      }
+
       setState(() {
-        _displayedWTAMatches = wtaMatchesByDate[_selectedDateStr] ?? [];
+        _displayedWTAMatches = wtaMatches;
       });
     } catch (e) {
       print('获取WTA赛事时出错: $e');
-      return;
+      setState(() {
+        _displayedWTAMatches = [];
+      });
     }
   }
 
@@ -307,15 +442,50 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    // 加载WTA数据
-    _loadWTA().then((_) {
-      // 加载完WTA数据后再更新显示
+    // 获取今天的日期（只保留年月日，不考虑时间）
+    final today =
+        DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final selectedDay = DateTime(date.year, date.month, date.day);
+
+    // 获取昨天和明天的日期
+    final yesterday = today.subtract(const Duration(days: 1));
+    final tomorrow = today.add(const Duration(days: 1));
+
+    // 根据选择的日期决定加载哪些数据
+    List<Future<void>> loadingTasks = [];
+
+    if (selectedDay.isBefore(today)) {
+      // 如果选择的日期小于今天，加载已完成比赛和WTA数据
+      debugPrint('加载过去日期的数据：已完成比赛 + WTA');
+      loadingTasks.add(_loadCompletedMatches());
+      loadingTasks.add(_loadWTA());
+    } else if (selectedDay.isAfter(today)) {
+      // 如果选择的日期大于今天，加载计划比赛和WTA数据
+      debugPrint('加载未来日期的数据：计划比赛 + WTA');
+      loadingTasks.add(_loadScheduledMatches());
+      loadingTasks.add(_loadWTA());
+    } else if (selectedDay.isAtSameMomentAs(today)) {
+      // 如果选择的是今天，加载所有类型的数据
+      debugPrint('加载今天的数据：所有类型比赛');
+      loadingTasks.add(_loadLiveMatches());
+      loadingTasks.add(_loadCompletedMatches());
+      loadingTasks.add(_loadScheduledMatches());
+      loadingTasks.add(_loadWTA());
+    } else {
+      // 备用情况，只加载WTA数据
+      debugPrint('加载备用数据：仅WTA');
+      loadingTasks.add(_loadWTA());
+    }
+
+    // 执行选定的加载任务
+    Future.wait(loadingTasks).then((_) {
+      // 所有数据加载完成后更新显示
       _updateDisplayedMatches();
       setState(() {
         _isLoading = false; // 加载完成后，关闭加载指示器
       });
     }).catchError((error) {
-      debugPrint('加载WTA数据出错: $error');
+      debugPrint('加载数据出错: $error');
       setState(() {
         _isLoading = false;
         _errorMessage = '加载比赛数据失败: $error';
@@ -409,16 +579,164 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  // 加载实时比赛数据
+  // 优化后的加载已完成比赛数据方法
   Future<void> _loadCompletedMatches() async {
     setState(() {
       _isLoadingCompleted = true;
     });
 
     try {
+      // 获取今天的日期（只保留年月日）
+      final today = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final selectedDay =
+          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+      // 如果不是今天日期且是过去日期，尝试从本地存储获取数据
+      if (selectedDay.isBefore(today)) {
+        debugPrint('检查本地存储的已完成比赛数据: $_selectedDateStr');
+
+        // 尝试从本地存储获取数据
+        final cachedData =
+            await _getCompletedMatchesFromLocalStorage(_selectedDateStr);
+
+        if (cachedData != null && cachedData.isNotEmpty) {
+          debugPrint('从本地存储获取到数据，数量: ${cachedData.length}');
+
+          // 将本地存储的数据转换为应用所需的格式
+          _matches.clear();
+          for (var match in cachedData) {
+            final player1SetScores =
+                match['player1SetScores'] as List<dynamic>? ?? [];
+            final player2SetScores =
+                match['player2SetScores'] as List<dynamic>? ?? [];
+            final player1TiebreakScores =
+                match['player1TiebreakScores'] as List<dynamic>? ?? [];
+            final player2TiebreakScores =
+                match['player2TiebreakScores'] as List<dynamic>? ?? [];
+
+            // 将本地数据转换为应用所需的格式
+            _matches.add({
+              'player1': match['player1'] ?? '',
+              'player2': match['player2'] ?? '',
+              'player1Rank': match['player1Rank'] ?? '',
+              'player2Rank': match['player2Rank'] ?? '',
+              'player1Country': match['player1Country'] ?? '',
+              'player2Country': match['player2Country'] ?? '',
+              'player1FlagUrl': match['player1FlagUrl'] ?? '',
+              'player2FlagUrl': match['player2FlagUrl'] ?? '',
+              'player2ImageUrl': match['player2ImageUrl'] ?? '',
+              'player1ImageUrl': match['player1ImageUrl'] ?? '',
+              'serving1': false,
+              'serving2': false,
+              'roundInfo': match['roundInfo'] ?? '',
+              'stadium': match['stadium'] ?? '',
+              'matchTime': match['matchTime'] ?? '',
+              'player1SetScores': player1SetScores,
+              'player2SetScores': player2SetScores,
+              'player1TiebreakScores': player1TiebreakScores,
+              'player2TiebreakScores': player2TiebreakScores,
+              'currentGameScore1': '',
+              'currentGameScore2': '',
+              'isPlayer1Winner': match['isPlayer1Winner'] ?? false,
+              'isPlayer2Winner': match['isPlayer2Winner'] ?? false,
+              'matchType': 'completed',
+              'tournamentName': match['tournamentName'] ?? '',
+              'matchId': match['matchId'] ?? '',
+              'tournamentId': match['tournamentId'] ?? '',
+              'year': match['year'] ?? '',
+            });
+          }
+
+          setState(() {
+            _completedMatchesByDate = {_selectedDateStr: cachedData};
+            _displayedCompletedMatches = _matches;
+            _isLoadingCompleted = false;
+            _noMoreData = false;
+          });
+
+          // 更新显示的比赛列表
+          return;
+        } else {
+          debugPrint('本地存储无数据，开始网络请求');
+        }
+      }
+
+      // 如果是今天或者本地存储没有数据，进行网络请求
+      await _loadCompletedMatchesFromNetwork();
+    } catch (e) {
+      setState(() {
+        _isLoadingCompleted = false;
+        _errorMessage = '加载已完成比赛数据失败';
+        print('Error loading completed matches: $e');
+      });
+    }
+  }
+
+// 从本地存储获取已完成比赛数据
+  Future<List<Map<String, dynamic>>?> _getCompletedMatchesFromLocalStorage(
+      String dateKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedDataString = prefs.getString('completed_matches_$dateKey');
+
+      if (cachedDataString != null) {
+        final List<dynamic> cachedList = json.decode(cachedDataString);
+        return cachedList.cast<Map<String, dynamic>>();
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('从本地存储获取数据失败: $e');
+      return null;
+    }
+  }
+
+// 保存已完成比赛数据到本地存储
+  Future<void> _saveCompletedMatchesToLocalStorage(
+      String dateKey, List<Map<String, dynamic>> matches) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final dataString = json.encode(matches);
+      await prefs.setString('completed_matches_$dateKey', dataString);
+
+      // 可选：设置数据过期时间（例如7天后过期）
+      final expirationTime = DateTime.now().add(const Duration(days: 7));
+      await prefs.setString('completed_matches_${dateKey}_expiry',
+          expirationTime.toIso8601String());
+
+      debugPrint('已完成比赛数据已保存到本地存储: $dateKey');
+    } catch (e) {
+      debugPrint('保存数据到本地存储失败: $e');
+    }
+  }
+
+// 检查本地存储数据是否过期
+  Future<bool> _isLocalDataExpired(String dateKey) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final expiryString =
+          prefs.getString('completed_matches_${dateKey}_expiry');
+
+      if (expiryString != null) {
+        final expiryTime = DateTime.parse(expiryString);
+        return DateTime.now().isAfter(expiryTime);
+      }
+
+      return true; // 如果没有过期时间，认为已过期
+    } catch (e) {
+      debugPrint('检查数据过期时间失败: $e');
+      return true;
+    }
+  }
+
+// 从网络加载已完成比赛数据（原有逻辑）
+  Future<void> _loadCompletedMatchesFromNetwork() async {
+    try {
       // 查找当前日期的比赛URL
       final scoresUrls = await _findCurrentTournamentsScoresUrls();
       debugPrint('找到的比赛URL: $scoresUrls');
+
       if (scoresUrls.isEmpty) {
         // 如果没有找到比赛URL，使用默认URL
         _completedMatchesByDate = {};
@@ -427,8 +745,17 @@ class _HomePageState extends State<HomePage> {
         _completedMatchesByDate = {};
 
         for (var url in scoresUrls) {
-          final matchesData = await ApiService.getATPMatchesResultData(
-              url['ScoresUrl'], url['Name']);
+          Map<String, List<Map<String, dynamic>>> matchesData = {};
+          if (url['Type'] == 'GS') {
+            final year = selectedDate.year.toString();
+            if (url['Name'] == 'US Open') {
+              matchesData = await ApiService.getUSOpenMatchesResultData(
+                  year, url['Name']);
+            }
+          } else {
+            matchesData = await ApiService.getATPMatchesResultData(
+                url['ScoresUrl'], url['Name']);
+          }
           // 合并数据
           imageBanners.add(url['TournamentImage']);
           imageBanners.add(url['tournamentImage2']);
@@ -442,7 +769,21 @@ class _HomePageState extends State<HomePage> {
         }
       }
 
-      debugPrint(' _loadCompletedMatches $_selectedDateStr');
+      debugPrint('网络请求完成: $_selectedDateStr');
+
+      // 保存数据到本地存储（只保存过去日期的数据）
+      final today = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final selectedDay =
+          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+
+      if (selectedDay.isBefore(today) &&
+          _completedMatchesByDate.containsKey(_selectedDateStr)) {
+        debugPrint('保存数据到本地存储: $_selectedDateStr');
+        await _saveCompletedMatchesToLocalStorage(
+            _selectedDateStr, _completedMatchesByDate[_selectedDateStr]!);
+      }
+
       setState(() {
         _matches.clear();
         if (_completedMatchesByDate.isEmpty) {
@@ -461,14 +802,13 @@ class _HomePageState extends State<HomePage> {
                 match['player2TiebreakScores'] as List<dynamic>? ?? [];
 
             final set1Scores = player1SetScores;
-
             final set2Scores = player2SetScores;
 
             // 将ATP比赛数据转换为应用所需的格式
             _matches.add({
               'player1': match['player1'] ?? '',
               'player2': match['player2'] ?? '',
-              'player1Rank': match['player1Rank'] ?? '', // ATP数据中可能没有排名信息
+              'player1Rank': match['player1Rank'] ?? '',
               'player2Rank': match['player2Rank'] ?? '',
               'player1Country': match['player1Country'] ?? '',
               'player2Country': match['player2Country'] ?? '',
@@ -487,7 +827,7 @@ class _HomePageState extends State<HomePage> {
               'player2TiebreakScores': player2TiebreakScores,
               'currentGameScore1': '',
               'currentGameScore2': '',
-              'isPlayer1Winner': match['isPlayer1Winner'], // 添加获胜者标识
+              'isPlayer1Winner': match['isPlayer1Winner'],
               'isPlayer2Winner': match['isPlayer2Winner'],
               'matchType': 'completed',
               'tournamentName': match['tournamentName'] ?? '',
@@ -503,14 +843,36 @@ class _HomePageState extends State<HomePage> {
       });
     } catch (e) {
       setState(() {
-        _isLoading = false;
+        _isLoadingCompleted = false;
         _errorMessage = '加载比赛数据失败';
         print('Error loading ATP matches: $e');
       });
     }
   }
 
-  // 模拟初始加载
+// 清理过期的本地存储数据（可在应用启动时调用）
+  Future<void> _cleanupExpiredLocalData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keys = prefs.getKeys();
+
+      for (String key in keys) {
+        if (key.startsWith('completed_matches_') && key.endsWith('_expiry')) {
+          final dataKey = key.replaceAll('_expiry', '');
+          final isExpired = await _isLocalDataExpired(
+              dataKey.replaceAll('completed_matches_', ''));
+
+          if (isExpired) {
+            await prefs.remove(dataKey);
+            await prefs.remove(key);
+            debugPrint('清理过期数据: $dataKey');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('清理过期数据失败: $e');
+    }
+  }
 
   // 模拟加载更多
   Future<void> _loadMoreMatches() async {
@@ -915,7 +1277,7 @@ class _HomePageState extends State<HomePage> {
                                         final match = _matches[index];
                                         // 安全检查：确保访问数组元素前先检查数组是否为空
 
-                                        debugPrint('item ===== :$match');
+                                        // debugPrint('item ===== :$match');
                                         return TennisScoreCard(
                                           player1: match['player1'] ?? '',
                                           player2: match['player2'] ?? '',
@@ -995,50 +1357,117 @@ class _HomePageState extends State<HomePage> {
                                                 ),
                                               );
                                             } else {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (context) =>
-                                                      MatchDetailsPage(
-                                                    matchId:
-                                                        match['matchId'] ?? '',
-                                                    tournamentId:
-                                                        match['tournamentId'] ??
-                                                            '',
-                                                    year: match['year'] ?? '',
-                                                    player1ImageUrl: match[
-                                                            'player1ImageUrl'] ??
-                                                        '',
-                                                    player2ImageUrl: match[
-                                                            'player2ImageUrl'] ??
-                                                        '',
-                                                    player1FlagUrl: match[
-                                                            'player1FlagUrl'] ??
-                                                        '',
-                                                    player2FlagUrl: match[
-                                                            'player2FlagUrl'] ??
-                                                        '',
-                                                    typeMatch:
-                                                        match['typePlayer'] ??
-                                                            'atp',
-                                                    // 添加传入的比分数据，支持5盘
-                                                    inputSetScores: {
-                                                      'player1': match[
-                                                              'player1SetScores'] ??
-                                                          [],
-                                                      'player2': match[
-                                                              'player2SetScores'] ??
-                                                          []
-                                                    },
-                                                    player1Id:
-                                                        match['player1Id'] ??
-                                                            '',
-                                                    player2Id:
-                                                        match['player2Id'] ??
-                                                            '',
+                                              final gs = match['GS']
+                                                      ?.toString()
+                                                      .toLowerCase() ??
+                                                  '';
+                                              if (gs.isNotEmpty) {
+                                                // Navigate to GS match details page
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        GSMatchDetailsPage(
+                                                      matchId:
+                                                          match['matchId'] ??
+                                                              '',
+                                                      tournamentId: match[
+                                                              'tournamentId'] ??
+                                                          '',
+                                                      year: match['year'] ?? '',
+                                                      player1ImageUrl: match[
+                                                              'player1ImageUrl'] ??
+                                                          '',
+                                                      player2ImageUrl: match[
+                                                              'player2ImageUrl'] ??
+                                                          '',
+                                                      player1FlagUrl: match[
+                                                              'player1FlagUrl'] ??
+                                                          '',
+                                                      player2FlagUrl: match[
+                                                              'player2FlagUrl'] ??
+                                                          '',
+                                                      typeMatch:
+                                                          match['typePlayer'] ??
+                                                              'atp',
+                                                      inputSetScores: {
+                                                        'player1': (match[
+                                                                        'player1SetScores']
+                                                                    as List<
+                                                                        dynamic>?)
+                                                                ?.cast<int>() ??
+                                                            [],
+                                                        'player2': (match[
+                                                                        'player2SetScores']
+                                                                    as List<
+                                                                        dynamic>?)
+                                                                ?.cast<int>() ??
+                                                            []
+                                                      },
+                                                      player1Id:
+                                                          match['player1Id'] ??
+                                                              '',
+                                                      player2Id:
+                                                          match['player2Id'] ??
+                                                              '',
+                                                      gs: gs,
+                                                    ),
                                                   ),
-                                                ),
-                                              );
+                                                );
+                                              } else {
+                                                // Navigate to regular match details page
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        MatchDetailsPage(
+                                                      matchId:
+                                                          match['matchId'] ??
+                                                              '',
+                                                      tournamentId: match[
+                                                              'tournamentId'] ??
+                                                          '',
+                                                      year: match['year'] ?? '',
+                                                      player1ImageUrl: match[
+                                                              'player1ImageUrl'] ??
+                                                          '',
+                                                      player2ImageUrl: match[
+                                                              'player2ImageUrl'] ??
+                                                          '',
+                                                      player1FlagUrl: match[
+                                                              'player1FlagUrl'] ??
+                                                          '',
+                                                      player2FlagUrl: match[
+                                                              'player2FlagUrl'] ??
+                                                          '',
+                                                      typeMatch:
+                                                          match['typePlayer'] ??
+                                                              'atp',
+                                                      inputSetScores: {
+                                                        'player1': (match[
+                                                                        'player1SetScores']
+                                                                    as List<
+                                                                        dynamic>?)
+                                                                ?.cast<int>() ??
+                                                            [],
+                                                        'player2': (match[
+                                                                        'player2SetScores']
+                                                                    as List<
+                                                                        dynamic>?)
+                                                                ?.cast<int>() ??
+                                                            []
+                                                      },
+                                                      player1Id:
+                                                          match['player1Id'] ??
+                                                              '',
+                                                      player2Id:
+                                                          match['player2Id'] ??
+                                                              '',
+                                                      gs: gs,
+                                                    ),
+                                                  ),
+                                                );
+                                              }
                                             }
                                           },
                                         );

@@ -5,7 +5,7 @@
  * @version: 1.0
  * @Date: 2025-04-21 17:22:17
  * @LastEditors: ouchao
- * @LastEditTime: 2025-08-25 10:38:38
+ * @LastEditTime: 2025-09-12 14:35:30
  */
 import 'package:LoveGame/utils/timezone_mapping.dart';
 import 'package:html/parser.dart';
@@ -91,25 +91,39 @@ class ApiService {
       String url, String tournament, String matchId) async {
     try {
       final matchScore = await getWTAMatcheScore(tournament, matchId);
-      debugPrint('matchScore ((()))$matchScore');
+      debugPrint('getWTAMatcheScore-------matchScore $matchScore');
       if (matchScore.isEmpty) {
         return {};
       }
-      String matchUrl =
-          'https://www.wtatennis.com/tournaments/$tournament/${matchScore['Tournament']['city'].toString().toLowerCase()}/2025/scores/$matchId';
-      final Uri uri = _buildUri(matchUrl, 'wta');
-      final response = await HttpService.get(
-        uri,
-        headers: {
-          'Accept': 'text/html',
-          'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        },
-        timeout: const Duration(seconds: 10),
-      );
 
+      // 添加空值检查
+      String city = '';
+      if (matchScore['Tournament'] != null &&
+          matchScore['Tournament']['city'] != null) {
+        city = matchScore['Tournament']['city'].toString().toLowerCase();
+        // 将空格替换为短横线
+        city = city.replaceAll(' ', '-');
+      } else {
+        debugPrint('警告: Tournament或city为空，使用默认值');
+        // 使用默认值或从其他地方获取城市名
+        city = 'default';
+      }
+
+      String matchUrl =
+          'https://www.wtatennis.com/tournaments/$tournament/$city/2025/scores/$matchId';
+      final Uri uri = _buildUri(matchUrl, 'wta');
+      final response = await HttpService.get(uri);
+      var htmlContent = "";
       if (response.statusCode == 200) {
-        final document = parse(response.body);
+        htmlContent = response.body;
+      }
+      // 使用HeadlessInAppWebView获取HTML内容
+      // debugPrint('开始获取WTA比赛HTML内容，URL: $matchUrl-$city');
+      // final htmlContent = await _getWTAMatchHtmlWithWebView(matchUrl);
+      // debugPrint('获取到WTA比赛HTML内容长度: ${htmlContent.length}');
+
+      if (htmlContent.isNotEmpty) {
+        final document = parse(htmlContent);
         Map<String, dynamic> matchStats = {
           'Tournament': {},
           'Match': {
@@ -237,7 +251,7 @@ class ApiService {
 
         return matchStats;
       } else {
-        throw Exception('获取WTA比赛统计数据失败: ${response.statusCode}');
+        throw Exception('获取WTA比赛HTML内容为空');
       }
     } catch (e) {
       debugPrint('获取WTA比赛统计数据异常: $e');
@@ -530,6 +544,107 @@ class ApiService {
     return currentTournaments;
   }
 
+  // 使用HeadlessInAppWebView获取WTA比赛HTML内容
+  static Future<String> _getWTAMatchHtmlWithWebView(String matchUrl) async {
+    final completer = Completer<String>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(matchUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('WTA比赛页面 HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载WTA比赛页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('WTA比赛页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 获取页面HTML内容
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始获取WTA比赛页面HTML...');
+                  return document.documentElement.outerHTML;
+                } catch (e) {
+                  console.error('获取HTML时出错:', e);
+                  return '';
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('WTA比赛HTML获取结果长度: ${result?.toString().length ?? 0}');
+
+            if (result != null && result.toString().isNotEmpty) {
+              completer.complete(result.toString());
+            } else {
+              debugPrint('WTA比赛HTML为空，尝试重新获取');
+              await Future.delayed(const Duration(seconds: 2));
+              final retryResult =
+                  await controller.evaluateJavascript(source: jsCode);
+              completer.complete(retryResult?.toString() ?? '');
+            }
+          } catch (e) {
+            debugPrint('获取WTA比赛HTML时出错: $e');
+            completer.complete('');
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('WTA比赛WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint(
+              'WTA比赛HTTP错误: ${errorResponse.statusCode}, URL: ${request.url}');
+          // 记录更详细的错误信息
+          debugPrint('WTA比赛HTTP错误详情: ${errorResponse.reasonPhrase}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('WTA比赛WebView请求超时');
+          return '';
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('WTA比赛HeadlessInAppWebView异常: $e');
+      return '';
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('WTA比赛HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放WTA比赛WebView时出错: $e');
+      }
+    }
+  }
+
   // 使用HeadlessInAppWebView获取赛程HTML内容
   static Future<String> _getScheduleHtmlWithWebView(String scheduleUrl) async {
     final completer = Completer<String>();
@@ -666,6 +781,9 @@ class ApiService {
 
       // 4. 获取每个巡回赛的比赛数据
       for (var tournament in todayTournaments) {
+        // if (tournament['Type'] == 'GS') {
+        //   continue;
+        // }
         final String scheduleUrl = tournament['ScheduleUrl'];
 
         // 使用HeadlessInAppWebView获取HTML内容
@@ -1746,9 +1864,13 @@ class ApiService {
       debugPrint(
           'getWTAMatcheScore!!!!!!!!!!!$tournamentId,$matchId,$uri ${response.statusCode}');
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        if (data != null && data is List && data.isNotEmpty) {
-          score = data[0];
+        try {
+          final data = json.decode(response.body);
+          if (data != null && data is List && data.isNotEmpty) {
+            score = data[0];
+          }
+        } catch (e) {
+          debugPrint('WTA比分JSON解析失败: $e');
         }
       }
       return score;
@@ -2105,6 +2227,356 @@ class ApiService {
         debugPrint('释放ATP比赛结果WebView时出错: $e');
       }
     }
+  }
+
+  // 使用HeadlessInAppWebView获取WTA球员详情HTML内容
+  static Future<String> _getWTAPlayerDetailsHtmlWithWebView(
+      String playerUrl) async {
+    final completer = Completer<String>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(playerUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('WTA球员详情页面 HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载WTA球员详情页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('WTA球员详情页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 获取页面HTML内容
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始获取WTA球员详情页面HTML...');
+                  return document.documentElement.outerHTML;
+                } catch (e) {
+                  console.error('获取HTML时出错:', e);
+                  return '';
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('WTA球员详情HTML获取结果长度: ${result?.toString().length ?? 0}');
+
+            if (result != null && result.toString().isNotEmpty) {
+              completer.complete(result.toString());
+            } else {
+              debugPrint('WTA球员详情HTML为空，尝试重新获取');
+              await Future.delayed(const Duration(seconds: 2));
+              final retryResult =
+                  await controller.evaluateJavascript(source: jsCode);
+              completer.complete(retryResult?.toString() ?? '');
+            }
+          } catch (e) {
+            debugPrint('获取WTA球员详情HTML时出错: $e');
+            completer.complete('');
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('WTA球员详情WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint('WTA球员详情HTTP错误: ${errorResponse.statusCode}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('WTA球员详情WebView请求超时');
+          return '';
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('WTA球员详情HeadlessInAppWebView异常: $e');
+      return '';
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('WTA球员详情HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放WTA球员详情WebView时出错: $e');
+      }
+    }
+  }
+
+  // 使用HeadlessInAppWebView获取US Open JSON数据
+  static Future<String> _getUSOpenJsonWithWebView(String url) async {
+    final completer = Completer<String>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(url)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+          cacheEnabled: true,
+          allowFileAccessFromFileURLs: true,
+          allowUniversalAccessFromFileURLs: true,
+        ),
+        onLoadStop: (controller, url) async {
+          try {
+            // 等待页面完全加载和JavaScript执行
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 获取响应内容
+            final result = await controller.evaluateJavascript(
+                source: 'document.body.innerText');
+
+            if (result != null && result.toString().isNotEmpty) {
+              // 尝试清理和验证JSON
+              String jsonStr = result.toString().trim();
+              debugPrint('获取到US Open JSON数据长度: ${jsonStr.length}');
+
+              // 检查是否是有效的JSON
+              try {
+                // 尝试解析JSON以验证格式
+                json.decode(jsonStr);
+                debugPrint('JSON格式验证成功');
+                completer.complete(jsonStr);
+              } catch (jsonError) {
+                debugPrint('JSON解析错误: $jsonError');
+                // 尝试修复常见的JSON格式问题
+                try {
+                  // 检查是否有未转义的引号或控制字符
+                  String cleanedJson = jsonStr
+                      .replaceAll(RegExp(r'\n'), '\n')
+                      .replaceAll(RegExp(r'\r'), '\r')
+                      .replaceAll(RegExp(r'\t'), '\t');
+
+                  // 再次尝试解析
+                  json.decode(cleanedJson);
+                  debugPrint('JSON格式修复成功');
+                  completer.complete(cleanedJson);
+                } catch (e) {
+                  debugPrint('JSON格式无法修复: $e');
+                  completer.complete('');
+                }
+              }
+            } else {
+              debugPrint('获取到的JSON数据为空');
+              completer.complete('');
+            }
+          } catch (e) {
+            debugPrint('获取页面内容错误: $e');
+            completer.complete('');
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete('');
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('获取JSON数据超时');
+          return '';
+        },
+      );
+      return result;
+    } catch (e) {
+      debugPrint('_getUSOpenJsonWithWebView异常: $e');
+      return '';
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+      } catch (e) {
+        debugPrint('释放WebView资源时出错: $e');
+      }
+    }
+  }
+
+  // 获取美网比赛数据
+  static Future<Map<String, List<Map<String, dynamic>>>>
+      getUSOpenMatchesResultData(String? year, String? name) async {
+    Map<String, List<Map<String, dynamic>>> matchesByDate = {};
+    try {
+      final eventDaysUrl =
+          'https://www.usopen.org/en_US/scores/feeds/$year/completed_matches/eventDays.json';
+      final eventDaysJson = await _getUSOpenJsonWithWebView(eventDaysUrl);
+      if (eventDaysJson.isNotEmpty) {
+        final eventDaysData = json.decode(eventDaysJson);
+        final Map<String, String> dailyUrls = {};
+
+        if (eventDaysData['eventDays'] is List) {
+          for (var day in eventDaysData['eventDays']) {
+            if (day['url'] != null &&
+                day['message'] != null &&
+                day['events'].length > 0) {
+              dailyUrls[day['message']] = day['url'];
+              // break;
+            }
+          }
+        }
+        for (var entry in dailyUrls.entries) {
+          final dateStr = entry.key;
+          final matchesUrl = entry.value;
+          final fullMatchesUrl = matchesUrl;
+
+          final matchesJson = await _getUSOpenJsonWithWebView(fullMatchesUrl);
+          debugPrint('usopen-----matchesData: $fullMatchesUrl');
+          if (matchesJson.isNotEmpty) {
+            final matchesData = json.decode(matchesJson);
+
+            final matches = matchesData['matches'] as List<dynamic>;
+            List<Map<String, dynamic>> formattedMatches = [];
+
+            String formattedDate = '';
+            try {
+              final datePart = dateStr.split(':').last.trim();
+              final parsedDate = DateFormat('EEEE, MMMM d').parse(datePart);
+              final finalDate =
+                  DateTime(int.parse(year!), parsedDate.month, parsedDate.day);
+              formattedDate = DateFormat('E, dd MMMM, yyyy').format(finalDate);
+            } catch (e) {
+              formattedDate = dateStr;
+            }
+
+            for (var match in matches) {
+              if (match['eventCode'] != 'MS' && match['eventCode'] != 'WS') {
+                continue;
+              }
+
+              final team1 = match['team1'];
+              final team2 = match['team2'];
+
+              List<int> player1SetScores = [];
+              List<int> player2SetScores = [];
+              List<int> player1TiebreakScores = [];
+              List<int> player2TiebreakScores = [];
+              final bool isMensMatch = match['eventCode'] == 'MS';
+
+              if (match['scores'] != null && match['scores']['sets'] != null) {
+                for (var set in match['scores']['sets']) {
+                  if (set is List &&
+                      set.length >= 2 &&
+                      set[0] != null &&
+                      set[1] != null) {
+                    player1SetScores.add(set[0]['score'] ?? 0);
+                    player2SetScores.add(set[1]['score'] ?? 0);
+                    player1TiebreakScores.add(
+                        int.tryParse(set[0]['tiebreak']?.toString() ?? '') ??
+                            0);
+                    player2TiebreakScores.add(
+                        int.tryParse(set[1]['tiebreak']?.toString() ?? '') ??
+                            0);
+                  } else {
+                    // Handle incomplete sets, e.g., from retirements
+                    player1SetScores.add(0);
+                    player2SetScores.add(0);
+                    player1TiebreakScores.add(0);
+                    player2TiebreakScores.add(0);
+                  }
+                }
+              }
+
+              // Pad remaining sets for display consistency
+              // while (player1SetScores.length < maxSets) {
+              //   player1SetScores.add(0);
+              //   player2SetScores.add(0);
+              //   player1TiebreakScores.add(0);
+              //   player2TiebreakScores.add(0);
+              // }
+
+              final matchData = {
+                'tournamentName': name,
+                'roundInfo': match['roundNameShort'],
+                'stadium': match['shortCourtName'],
+                'matchTime': match['duration'],
+                'isCompleted': match['status'] == 'Completed',
+                'matchStatus':
+                    match['status'] == 'Completed' ? 'Completed' : 'Scheduled',
+                'player1': team1['displayNameA'],
+                'player2': team2['displayNameA'],
+                'player1Id': isMensMatch
+                    ? (team1['idA'] ?? '').replaceFirst('atp', '')
+                    : (team1['idA'] ?? '').replaceFirst('wta', ''),
+                'player2Id': isMensMatch
+                    ? (team2['idA'] ?? '').replaceFirst('atp', '')
+                    : (team2['idA'] ?? '').replaceFirst('wta', ''),
+                'player1Rank':
+                    team1['seed'] != null ? '(${team1['seed']})' : '',
+                'player2Rank':
+                    team2['seed'] != null ? '(${team2['seed']})' : '',
+                'player1ImageUrl': isMensMatch
+                    ? 'https://www.atptour.com/-/media/alias/player-headshot/${(team1['idA'] ?? '').replaceFirst('atp', '')}'
+                    : 'https://wtafiles.blob.core.windows.net/images/headshots/${(team1['idA'] ?? '').replaceFirst('wta', '')}.jpg', // No image URL in new API
+                'player2ImageUrl': isMensMatch
+                    ? 'https://www.atptour.com/-/media/alias/player-headshot/${(team2['idA'] ?? '').replaceFirst('atp', '')}'
+                    : 'https://wtafiles.blob.core.windows.net/images/headshots/${(team2['idA'] ?? '').replaceFirst('wta', '')}.jpg', // No image URL in new API
+                'player1FlagUrl':
+                    'https://www.atptour.com/-/media/images/flags/${team1['nationA'].toString().toLowerCase()}.svg',
+                'player2FlagUrl':
+                    'https://www.atptour.com/-/media/images/flags/${team2['nationA'].toString().toLowerCase()}.svg',
+                'player1Country': team1['nationA'],
+                'player2Country': team2['nationA'],
+                'player1SetScores': player1SetScores,
+                'player2SetScores': player2SetScores,
+                'player1TiebreakScores': player1TiebreakScores,
+                'player2TiebreakScores': player2TiebreakScores,
+                'isWinner1': match['winner'] == '1',
+                'isWinner2': match['winner'] == '2',
+                'matchDuration': match['duration'] ?? '-',
+                'isPlayer1Winner': match['winner'] == '1',
+                'isPlayer2Winner': match['winner'] == '2',
+                'matchType':
+                    match['status'] == 'Completed' ? 'completed' : 'unmatch',
+                'matchId': match['match_id'],
+                'tournamentId': '560', // Hardcoded for US Open
+                'year': year,
+                'GS': 'usopen'
+              };
+              formattedMatches.add(matchData);
+            }
+            debugPrint(
+                'usopen-----matchesData: $formattedDate,$formattedMatches');
+            matchesByDate[formattedDate] = formattedMatches;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error fetching US Open matches: $e');
+    }
+    return matchesByDate;
   }
 
   static Future<Map<String, List<Map<String, dynamic>>>>
@@ -2475,32 +2947,165 @@ class ApiService {
     return matchesByDate;
   }
 
+  // 使用HeadlessInAppWebView获取ATP球员详情JSON对象
+  static Future<Map<String, dynamic>> _getPlayerDetailsHtmlWithWebView(
+      String playerUrl) async {
+    final completer = Completer<Map<String, dynamic>>();
+    HeadlessInAppWebView? headlessWebView;
+
+    try {
+      headlessWebView = HeadlessInAppWebView(
+        initialUrlRequest: URLRequest(url: WebUri(playerUrl)),
+        initialSettings: InAppWebViewSettings(
+          userAgent:
+              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+          javaScriptEnabled: true,
+          domStorageEnabled: true,
+          databaseEnabled: true,
+          clearCache: false,
+        ),
+        onWebViewCreated: (controller) {
+          debugPrint('ATP球员详情页面 HeadlessInAppWebView创建成功');
+        },
+        onLoadStart: (controller, url) {
+          debugPrint('开始加载ATP球员详情页面: $url');
+        },
+        onLoadStop: (controller, url) async {
+          debugPrint('ATP球员详情页面加载完成: $url');
+
+          try {
+            // 等待页面完全渲染
+            await Future.delayed(const Duration(seconds: 2));
+
+            // 获取页面JSON内容
+            final jsCode = '''
+              (function() {
+                try {
+                  console.log('开始解析ATP球员详情页面数据...');
+                  
+                  // 检查页面是否已经包含JSON数据
+                  const bodyText = document.body.textContent || document.body.innerText;
+                  console.log('页面内容长度:', bodyText.length);
+                  
+                  // 尝试解析JSON数据
+                  try {
+                    const data = JSON.parse(bodyText);
+                    if (data && typeof data === 'object') {
+                      console.log('成功解析ATP球员详情JSON数据');
+                      return data;
+                    }
+                  } catch (e) {
+                    console.log('页面内容不是JSON格式，返回原始内容');
+                    return bodyText;
+                  }
+                  
+                  console.log('无法解析ATP球员详情数据');
+                  return null;
+                } catch (e) {
+                  console.error('ATP球员详情JavaScript解析错误:', e);
+                  return null;
+                }
+              })()
+            ''';
+
+            final result = await controller.evaluateJavascript(source: jsCode);
+            debugPrint('ATP球员详情获取结果: ${result?.toString()}');
+
+            if (result != null) {
+              if (result is Map) {
+                completer.complete(Map<String, dynamic>.from(result));
+              } else if (result is String && result.isNotEmpty) {
+                try {
+                  final parsedData = json.decode(result);
+                  if (parsedData is Map<String, dynamic>) {
+                    completer.complete(parsedData);
+                  } else {
+                    completer.complete({'rawContent': result});
+                  }
+                } catch (e) {
+                  debugPrint('解析JavaScript返回的JSON失败: $e');
+                  completer.complete({'rawContent': result});
+                }
+              } else {
+                completer.complete({});
+              }
+            } else {
+              debugPrint('ATP球员详情为空，尝试重新获取');
+              await Future.delayed(const Duration(seconds: 2));
+              final retryResult =
+                  await controller.evaluateJavascript(source: jsCode);
+              if (retryResult != null && retryResult is Map) {
+                completer.complete(Map<String, dynamic>.from(retryResult));
+              } else {
+                completer.complete({});
+              }
+            }
+          } catch (e) {
+            debugPrint('获取ATP球员详情HTML时出错: $e');
+            completer.complete({});
+          }
+        },
+        onReceivedError: (controller, request, error) {
+          debugPrint('ATP球员详情WebView加载错误: ${error.description}');
+          if (!completer.isCompleted) {
+            completer.complete({});
+          }
+        },
+        onReceivedHttpError: (controller, request, errorResponse) {
+          debugPrint('ATP球员详情HTTP错误: ${errorResponse.statusCode}');
+          if (!completer.isCompleted) {
+            completer.complete({});
+          }
+        },
+      );
+
+      await headlessWebView.run();
+
+      // 设置超时
+      final result = await completer.future.timeout(
+        const Duration(seconds: 30),
+        onTimeout: () {
+          debugPrint('ATP球员详情WebView请求超时');
+          return <String, dynamic>{};
+        },
+      );
+
+      return result;
+    } catch (e) {
+      debugPrint('ATP球员详情HeadlessInAppWebView异常: $e');
+      return <String, dynamic>{};
+    } finally {
+      try {
+        await headlessWebView?.dispose();
+        debugPrint('ATP球员详情HeadlessInAppWebView已释放');
+      } catch (e) {
+        debugPrint('释放ATP球员详情WebView时出错: $e');
+      }
+    }
+  }
+
   // 获取球员详情数据
   static Future<Map<String, dynamic>> getPlayerDetails(String playerId) async {
     try {
-      final String endpoint = '/en/-/www/players/hero/$playerId?v=1';
-      final Uri uri = _buildUri(endpoint, '');
+      // 构建ATP球员详情页面URL
+      final String playerUrl =
+          'https://www.atptour.com/en/-/www/players/hero/$playerId?v=1';
+      debugPrint('ATP球员详情URL: $playerUrl');
 
-      final response = await _makeHttpRequest(
-        uri,
-        {
-          'Accept': 'application/json',
-          'Referer': 'https://www.atptour.com/en/rankings/singles',
-          'X-Requested-With': 'XMLHttpRequest',
-          'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        },
-        timeout: const Duration(seconds: 10),
-      );
+      // 使用HeadlessInAppWebView获取JSON对象
+      final playerData = await _getPlayerDetailsHtmlWithWebView(playerUrl);
+      debugPrint('getPlayerDetails 获取到的数据: $playerData');
 
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
+      if (playerData.isNotEmpty) {
+        // 添加playerId到返回的数据中
+        playerData['playerId'] = playerId;
+        return playerData;
       } else {
-        throw Exception('获取球员数据失败: ${response.statusCode}');
+        throw Exception('获取ATP球员数据失败: 返回数据为空');
       }
     } catch (e) {
       debugPrint('获取球员详情异常: $e');
-      // 如果API调用失败，尝试加载本地数据
+      // 如果WebView调用失败，尝试加载本地数据
       return loadLocalPlayerData();
     }
   }
@@ -2512,22 +3117,14 @@ class ApiService {
       // 构建完整URL
       String playerUrl =
           'https://www.wtatennis.com/players/$playerId/$playername';
-      final Uri uri = _buildUri(playerUrl, 'wta');
-      debugPrint('WTAgURI$playerUrl');
-      final response = await _makeHttpRequest(
-        uri,
-        {
-          'Accept': 'text/html',
-          'Referer': 'https://www.atptour.com/en/rankings/singles',
-          'X-Requested-With': 'XMLHttpRequest',
-          'User-Agent':
-              'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        },
-        timeout: const Duration(seconds: 10),
-      );
-      debugPrint('getWTAPlayerDetails!!!!!!!!!!!${response.statusCode}');
-      if (response.statusCode == 200) {
-        final document = parse(response.body);
+      debugPrint('WTAgURI=======$playerUrl');
+
+      // 使用HeadlessInAppWebView获取HTML内容
+      final htmlContent = await _getWTAPlayerDetailsHtmlWithWebView(playerUrl);
+      debugPrint('getWTAPlayerDetails HTML长度: ${htmlContent.length}');
+
+      if (htmlContent.isNotEmpty) {
+        final document = parse(htmlContent);
         Map<String, dynamic> playerData = {};
         // 先查找player-headshot__photo容器
         final headshotContainers =
@@ -2705,11 +3302,26 @@ class ApiService {
         playerData['ScRelativeUrlPlayerCountryFlag'] = '';
         // 添加其他 ATP 格式字段的默认值
         playerData['BackHand'] = {'Description': 'Two-Handed'};
-        playerData['Age'] = document
+        if (document
             .getElementsByClassName('profile-header__meta-item')
             .first
             .text
-            .trim();
+            .contains('yrs')) {
+          playerData['Age'] = document
+              .getElementsByClassName('profile-header__meta-item')[0]
+              .text
+              .trim();
+        } else if (document
+                .getElementsByClassName('profile-header__meta-item')
+                .length >=
+            2) {
+          playerData['Age'] = document
+              .getElementsByClassName('profile-header__meta-item')[1]
+              .text
+              .trim();
+        } else {
+          playerData['Age'] = '--';
+        }
         playerData['WeightLb'] = '--';
         playerData['ProYear'] = '--';
         final profileHeader = document.getElementsByClassName('profile-header');
@@ -2776,7 +3388,7 @@ class ApiService {
 
         return playerData;
       } else {
-        throw Exception('获取WTA球员数据失败: ${response.statusCode}');
+        throw Exception('获取WTA球员数据失败: HTML内容为空');
       }
     } catch (e) {
       debugPrint('解析WTA球员数据异常: $e');
@@ -2966,7 +3578,168 @@ class ApiService {
     };
   }
 
-// 获取WTA球员排名
+// 从US Open网站获取WTA球员详细信息
+  static Future<Map<String, dynamic>> getWTAPlayerDetailsFromUSOpen(
+      String playerId, String playername) async {
+    try {
+      // 获取当前年份
+      final currentYear = DateTime.now().year;
+
+      // 构建完整URL
+      final String playerUrl =
+          'https://www.usopen.org/en_US/scores/feeds/$currentYear/players/details/wta$playerId.json';
+      debugPrint('US Open WTA球员详情URL: $playerUrl');
+
+      // 使用HeadlessInAppWebView获取JSON数据
+      final jsonString = await _getUSOpenJsonWithWebView(playerUrl);
+
+      if (jsonString.isNotEmpty) {
+        final Map<String, dynamic> data = json.decode(jsonString);
+        debugPrint('成功获取US Open WTA球员数据');
+
+        // 将US Open数据格式转换为与现有格式一致
+        Map<String, dynamic> playerData = {
+          'Name': '${data['first_name'] ?? ''} ${data['last_name'] ?? ''}',
+          'SglRank': data['rank']?['current_singles']?.toString() ?? '0',
+          'SglRankMove': '0', // US Open数据中没有这个字段
+          'PlayHand': {'Description': data['plays'] ?? 'Right-Handed'},
+          'BackHand': {'Description': 'Two-Handed'}, // US Open数据中没有这个字段
+          'Age': _calculateAge(data['birth']?['date']),
+          'WeightLb': '-',
+          'HeightFt': data['height']?['imperial'] ?? '-',
+          'HeightCM': data['height']?['metric'] ?? '',
+          'BirthDate': data['birth']?['date'] ?? '',
+          'BirthCity': data['birth']?['place'] ?? '',
+          'ProYear': data['turned_pro']?.toString() ?? '0',
+          'Nationality': data['nation']?['code'] ?? '',
+          'Coach': '-', // US Open数据中没有这个字段
+          'SglYtdWon': data['results']?['year']?['matches_won'] ?? 0,
+          'SglYtdLost': data['results']?['year']?['matches_lost'] ?? 0,
+          'SglYtdTitles': '0', // US Open数据中没有这个字段
+          'SglCareerWon': data['results']?['career']?['matches_won'] ?? 0,
+          'SglCareerLost': data['results']?['career']?['matches_lost'] ?? 0,
+          'SglCareerTitles':
+              data['results']?['career']?['singles_titles']?.toString() ?? '0',
+          'SglHiRank': data['rank']?['high_singles']?.toString() ?? '0',
+          'SglHiRankDate':
+              data['rank']?['high_singles_date'] ?? DateTime.now().toString(),
+          'SglYtdPrizeFormatted':
+              data['results']?['year']?['singles_prize_money'] ?? '0',
+          'CareerPrizeFormatted':
+              data['results']?['career']?['prize_money'] ?? '0',
+          'PlayerType': 'WTA',
+          'ImageUrl':
+              'https://wtafiles.blob.core.windows.net/images/headshots/' +
+                  playerId.toString() +
+                  '.jpg', // 假设的图片URL格式
+          'FlagUrl': 'https://www.atptour.com/-/media/images/flags/' +
+              (data['nation']?['code']?.toLowerCase() ?? 'xxx') +
+              '.svg', // 假设的国旗URL格式
+        };
+
+        return playerData;
+      } else {
+        throw Exception('获取US Open WTA球员数据失败: JSON数据为空');
+      }
+    } catch (e) {
+      debugPrint('获取US Open WTA球员数据异常: $e');
+      // 返回默认数据结构
+      return {
+        'Name': '',
+        'SglRank': '0',
+        'SglRankMove': '0',
+        'PlayHand': {'Description': 'Right-Handed'},
+        'BackHand': {'Description': 'Two-Handed'},
+        'Age': '0',
+        'WeightLb': '0',
+        'HeightFt': '',
+        'BirthDate': '',
+        'BirthCity': '',
+        'ProYear': '0',
+        'Nationality': '',
+        'Coach': '',
+        'SglYtdWon': 0,
+        'SglYtdLost': 0,
+        'SglYtdTitles': '0',
+        'SglCareerWon': 0,
+        'SglCareerLost': 0,
+        'SglCareerTitles': '0',
+        'SglHiRank': '0',
+        'SglHiRankDate': DateTime.now().toString(),
+        'SglYtdPrizeFormatted': '0',
+        'CareerPrizeFormatted': '0',
+        'PlayerType': 'WTA',
+        'ImageUrl': '',
+        'FlagUrl': '',
+      };
+    }
+  }
+
+  // 根据生日计算年龄
+  static String _calculateAge(String? birthDateStr) {
+    if (birthDateStr == null || birthDateStr.isEmpty) {
+      return '0';
+    }
+
+    try {
+      DateTime birthDate;
+      // 尝试解析不同格式的日期
+      try {
+        // 首先尝试解析ISO格式日期 (如 "2007-04-29")
+        birthDate = DateTime.parse(birthDateStr);
+      } catch (e) {
+        try {
+          // 尝试解析格式如 "29 April 2007"
+          final parts = birthDateStr.split(' ');
+          if (parts.length < 3) return '0';
+
+          final day = int.tryParse(parts[0]) ?? 1;
+          final month = _getMonthNumber(parts[1]);
+          final year = int.tryParse(parts[2]) ?? 2000;
+
+          birthDate = DateTime(year, month, day);
+        } catch (e2) {
+          debugPrint('无法解析日期格式: $birthDateStr, 错误: $e2');
+          return '0';
+        }
+      }
+
+      final today = DateTime.now();
+
+      int age = today.year - birthDate.year;
+      if (today.month < birthDate.month ||
+          (today.month == birthDate.month && today.day < birthDate.day)) {
+        age--;
+      }
+
+      return age.toString();
+    } catch (e) {
+      debugPrint('计算年龄出错: $e');
+      return '0';
+    }
+  }
+
+  // 将月份名称转换为数字
+  static int _getMonthNumber(String monthName) {
+    const months = {
+      'January': 1,
+      'February': 2,
+      'March': 3,
+      'April': 4,
+      'May': 5,
+      'June': 6,
+      'July': 7,
+      'August': 8,
+      'September': 9,
+      'October': 10,
+      'November': 11,
+      'December': 12
+    };
+
+    return months[monthName] ?? 1;
+  }
+
+  // 获取WTA球员排名
   // 获取WTA球员排名 - 使用HeadlessInAppWebView
   Future<List<dynamic>> getWTAPlayerRankings() async {
     debugPrint('使用HeadlessInAppWebView获取WTA球员排名数据...');

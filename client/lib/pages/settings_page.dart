@@ -103,8 +103,8 @@ class _SettingsPageState extends State<SettingsPage> {
                             child: Center(
                               child: Image.asset(
                                 'assets/images/app_logo.png',
-                                width: 85,
-                                height: 85,
+                                width: 120,
+                                height: 120,
                                 errorBuilder: (context, error, stackTrace) {
                                   return const Icon(
                                     Icons.sports_tennis,
@@ -115,16 +115,7 @@ class _SettingsPageState extends State<SettingsPage> {
                               ),
                             ),
                           ),
-                          const SizedBox(height: 20),
-                          const Text(
-                            'Love Game',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 0.5,
-                            ),
-                          ),
+                          const SizedBox(height: 10),
                         ],
                       ),
                     ),
