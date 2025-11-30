@@ -9,6 +9,7 @@
  */
 import 'package:LoveGame/pages/splash_screen.dart';
 import 'package:LoveGame/utils/constants.dart';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
@@ -16,6 +17,7 @@ import 'pages/home_page.dart';
 import 'pages/tournament_calendar_page.dart';
 import 'pages/player_rankings_page.dart'; // 添加排名页面导入
 import 'utils/ssl_config.dart';
+import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 
 void main() {
   // 初始化SSL配置
@@ -97,16 +99,18 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     ),
                   ],
                 ),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: secondaryColor,
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.5),
-                        spreadRadius: 1,
-                        blurRadius: 10,
-                      ),
-                    ],
+                child: LiquidGlass(
+                  settings: LiquidGlassSettings(
+                    thickness: 15,
+                    blur: 8,
+                    refractiveIndex: 1.2,
+                    lightIntensity: 0.7,
+                    saturation: 1.1,
+                    lightAngle: 0.5 * math.pi,
+                    glassColor: Colors.white.withOpacity(0.1),
+                  ),
+                  shape: LiquidRoundedSuperellipse(
+                    borderRadius: Radius.circular(20),
                   ),
                   child: BottomNavigationBar(
                     items: <BottomNavigationBarItem>[
@@ -151,10 +155,10 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                       ),
                     ],
                     currentIndex: _selectedIndex,
-                    elevation: 0.0,
                     selectedItemColor: primaryColor,
                     unselectedItemColor: Colors.grey,
-                    backgroundColor: secondaryColor,
+                    backgroundColor: Colors.transparent,
+                    elevation: 0,
                     showSelectedLabels: true,
                     showUnselectedLabels: true,
                     type: BottomNavigationBarType.fixed,
