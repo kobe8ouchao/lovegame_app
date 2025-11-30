@@ -14,11 +14,11 @@ A beautiful Flutter application that provides real-time tennis scores, player pr
 - **Match Analytics** - In-depth match statistics and technical analysis
 - **Ranking Systems** - ATP and WTA live ranking boards
 - **Tournament Calendar** - Complete annual tournament schedule
-
+- **Tennis ATP&WTA API** - Data API SDK
+  
 ### 🌐 Multi-Platform Support
 - **iOS** - Optimized for iPhone and iPad
 - **Android** - Supports various Android devices
-- **Web** - Access directly in your browser
 
 ### 🎨 Design Excellence
 - Modern Material Design interface
