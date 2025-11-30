@@ -1,4 +1,4 @@
-<div align="center"><img width="400" height="400" alt="app_logo" src="https://github.com/user-attachments/assets/cb062270-f6c2-46f0-8c83-6cd6baf95ac9" />
+<div align="center" style="boder-raduis:20px"><img width="300" height="300" alt="app_logo" src="https://github.com/user-attachments/assets/cb062270-f6c2-46f0-8c83-6cd6baf95ac9" />
 </div>
 # LoveGame - Tennis Live Scores App 🎾
 
@@ -7,6 +7,13 @@
 [](LICENSE)
 
 A beautiful Flutter application that provides real-time tennis scores, player profiles, match statistics, and ATP/WTA rankings. Built for tennis enthusiasts who want to stay updated with the latest matches and player information.
+
+## 📱 App Screenshots
+
+<img width="207" height="445" alt="IMG_2329" src="https://github.com/user-attachments/assets/54114fcf-b034-4f82-b22c-ad0e146a8bca"/>
+<img width="207" height="445" alt="IMG_2329" src="https://github.com/user-attachments/assets/e4cf61c9-664b-4d42-989d-f282f01cd7bb"/>
+<img width="207" height="445" alt="IMG_2328" src="https://github.com/user-attachments/assets/4d2dc2d3-00bd-4cce-b269-1c7bf1110a62" />
+<img width="207" height="445" alt="IMG_2329" src="https://github.com/user-attachments/assets/474fc0f4-9097-4121-8199-332dcdb7e730" />
 
 ## ✨ Features
 
@@ -59,12 +66,6 @@ flutter build ios
 Android
 flutter build apk
 ```
-## 📱 App Screenshots
-
-<img width="207" height="445" alt="IMG_2329" src="https://github.com/user-attachments/assets/54114fcf-b034-4f82-b22c-ad0e146a8bca"/>
-<img width="207" height="445" alt="IMG_2329" src="https://github.com/user-attachments/assets/e4cf61c9-664b-4d42-989d-f282f01cd7bb"/>
-<img width="207" height="445" alt="IMG_2328" src="https://github.com/user-attachments/assets/4d2dc2d3-00bd-4cce-b269-1c7bf1110a62" />
-<img width="207" height="445" alt="IMG_2329" src="https://github.com/user-attachments/assets/474fc0f4-9097-4121-8199-332dcdb7e730" />
 
 ## 🏗️ Project Structure
 lovegame_app/
