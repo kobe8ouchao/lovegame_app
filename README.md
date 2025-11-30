@@ -64,8 +64,8 @@ flutter build apk
 | Home Screen | Match Details | Player Profile | Rankings |
 |-------------|---------------|----------------|----------|
 ![截屏 2025-10-13 11 10 30](https://github.com/user-attachments/assets/ff009d20-6476-4958-9d80-dce1e0db9afb)
-<img width="828" height="1792" alt="IMG_2329" src="https://github.com/user-attachments/assets/474fc0f4-9097-4121-8199-332dcdb7e730" />
-<img width="828" height="1792" alt="IMG_2328" src="https://github.com/user-attachments/assets/4d2dc2d3-00bd-4cce-b269-1c7bf1110a62" />
+<img width="414" height="891" alt="IMG_2329" src="https://github.com/user-attachments/assets/474fc0f4-9097-4121-8199-332dcdb7e730" />
+<img width="414" height="891" alt="IMG_2328" src="https://github.com/user-attachments/assets/4d2dc2d3-00bd-4cce-b269-1c7bf1110a62" />
 
 
 ## 🏗️ Project Structure
