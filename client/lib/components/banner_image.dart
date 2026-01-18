@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class BannerImage extends StatelessWidget {
   final String imageUrl;
@@ -28,10 +29,12 @@ class BannerImage extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           // 图片
-          Image.network(
-            imageUrl,
+          CachedNetworkImage(
+            imageUrl: imageUrl,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
+            memCacheWidth: 1080,
+            maxWidthDiskCache: 1080,
+            errorWidget: (context, url, error) {
               return Center(
                 child: Icon(
                   Icons.broken_image,
@@ -40,14 +43,10 @@ class BannerImage extends StatelessWidget {
                 ),
               );
             },
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
+            progressIndicatorBuilder: (context, url, downloadProgress) {
               return Center(
                 child: CircularProgressIndicator(
-                  value: loadingProgress.expectedTotalBytes != null
-                      ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                      : null,
+                  value: downloadProgress.progress,
                   color: const Color(0xFF94E831),
                 ),
               );

@@ -105,7 +105,7 @@ class _HomePageState extends State<HomePage> {
     try {
       // 加载WTA赛事数据
       final String jsonString =
-          await rootBundle.loadString('assets/2025_wta_tournament.json');
+          await rootBundle.loadString('assets/2026_wta_tournament.json');
       final Map<String, dynamic> tournamentData = json.decode(jsonString);
 
       if (tournamentData.containsKey('content')) {
@@ -746,18 +746,16 @@ class _HomePageState extends State<HomePage> {
 
         for (var url in scoresUrls) {
           Map<String, List<Map<String, dynamic>>> matchesData = {};
-          if (url['Type'] == 'GS') {
+          if (url['Type'] == 'GS' && url['Name'] == 'US Open') {
             final year = selectedDate.year.toString();
-            if (url['Name'] == 'US Open') {
-              matchesData = await ApiService.getUSOpenMatchesResultData(
-                  year, url['Name']);
-            }
+            matchesData =
+                await ApiService.getUSOpenMatchesResultData(year, url['Name']);
           } else {
             matchesData = await ApiService.getATPMatchesResultData(
                 url['ScoresUrl'], url['Name']);
           }
           // 合并数据
-          imageBanners.add(url['TournamentImage']);
+          // imageBanners.add(url['TournamentImage']);
           imageBanners.add(url['tournamentImage2']);
           matchesData.forEach((date, matches) {
             if (_completedMatchesByDate.containsKey(date)) {
@@ -894,10 +892,34 @@ class _HomePageState extends State<HomePage> {
       final selectedDay =
           DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
 
-      // 1. 只有当选择的日期是今天时，才添加直播比赛（优先级最高）
-      if (selectedDay.isAtSameMomentAs(today) && _liveMatches.isNotEmpty) {
-        _matches.addAll(_liveMatches);
+      // 辅助函数：生成比赛唯一键
+      String getMatchKey(Map<String, dynamic> match) {
+        final p1 = (match['player1'] ?? '').toString().trim().toLowerCase();
+        final p2 = (match['player2'] ?? '').toString().trim().toLowerCase();
+        final players = [p1, p2]..sort();
+        return players.join('_');
       }
+
+      // 获取已完成比赛的Keys
+      final completedMatches = _completedMatchesByDate[_selectedDateStr] ?? [];
+      final completedKeys = completedMatches.map(getMatchKey).toSet();
+
+      // 获取直播比赛的Keys (仅当今天是选中日期时)
+      final liveMatches = (selectedDay.isAtSameMomentAs(today))
+          ? _liveMatches
+          : <Map<String, dynamic>>[];
+      final liveKeys = liveMatches.map(getMatchKey).toSet();
+
+      // 1. 添加直播比赛（优先级最高，但如果已在完成列表中则过滤）
+      if (liveMatches.isNotEmpty) {
+        for (var match in liveMatches) {
+          if (!completedKeys.contains(getMatchKey(match))) {
+            match['matchType'] = 'Live';
+            _matches.add(match);
+          }
+        }
+      }
+
       List<Map<String, dynamic>> wtaLiveMatches = [];
       List<Map<String, dynamic>> wtaOtherMatches = [];
       for (var match in _displayedWTAMatches) {
@@ -911,38 +933,43 @@ class _HomePageState extends State<HomePage> {
         _matches.addAll(wtaLiveMatches);
       }
 
-      // 2. 再添加计划比赛（优先级次之）
+      // 2. 添加计划比赛（过滤掉已存在于直播或已完成列表中的比赛）
       if (selectedDay.isAtSameMomentAs(today) || selectedDay.isAfter(today)) {
         final scheduledMatches =
             _scheduledMatchesByDate[_selectedDateStr] ?? [];
+        List<Map<String, dynamic>> filteredScheduled = [];
+
         if (scheduledMatches.isNotEmpty) {
-          _displayedScheduledMatches = scheduledMatches;
-          _matches.addAll(_displayedScheduledMatches);
-        } else {
-          _displayedScheduledMatches = [];
+          for (var match in scheduledMatches) {
+            String key = getMatchKey(match);
+            // 如果不在直播列表且不在已完成列表中，则添加
+            if (!liveKeys.contains(key) && !completedKeys.contains(key)) {
+              match['matchType'] = 'Scheduled';
+              filteredScheduled.add(match);
+            }
+          }
         }
+        _displayedScheduledMatches = filteredScheduled;
+        _matches.addAll(_displayedScheduledMatches);
+      } else {
+        _displayedScheduledMatches = [];
       }
 
-      // 3. 最后添加已完成比赛（优先级最低）
-      final completedMatches = _completedMatchesByDate[_selectedDateStr] ?? [];
+      // 3. 添加已完成比赛
       debugPrint(
           ' _updateDisplayedMatches $_selectedDateStr----${completedMatches.length}');
 
       if (completedMatches.isNotEmpty) {
+        for (var match in completedMatches) {
+          match['matchType'] = 'Completed';
+        }
         _displayedCompletedMatches = completedMatches;
         _matches.addAll(_displayedCompletedMatches);
       } else {
         _displayedCompletedMatches = [];
       }
-      for (var i = 0; i < _matches.length; i++) {
-        if (_liveMatches.contains(_matches[i])) {
-          _matches[i]['matchType'] = 'Live';
-        } else if (_displayedScheduledMatches.contains(_matches[i])) {
-          _matches[i]['matchType'] = 'Scheduled';
-        } else {
-          _matches[i]['matchType'] = 'Completed';
-        }
-      }
+
+      // 4. 添加WTA其他比赛
       if (wtaOtherMatches.isNotEmpty) {
         _matches.addAll(wtaOtherMatches);
       }
@@ -1012,53 +1039,47 @@ class _HomePageState extends State<HomePage> {
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: double.infinity,
-                                placeholder: (context, url) => const Center(
-                                  child: CircularProgressIndicator(),
+                                memCacheWidth: 1080, // 限制内存缓存宽度，减少内存占用
+                                maxWidthDiskCache: 1080, // 限制磁盘缓存宽度
+                                placeholder: (context, url) => Container(
+                                  color: Colors.black,
+                                  child: const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
                                 ),
-                                errorWidget: (context, url, error) =>
-                                    const Icon(Icons.error),
+                                errorWidget: (context, url, error) => Container(
+                                  color: Colors.black,
+                                  child: const Center(
+                                    child:
+                                        Icon(Icons.error, color: Colors.white),
+                                  ),
+                                ),
                               ),
                             )
-                          : Image.network(
-                              'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=1920&auto=format&fit=crop',
+                          : CachedNetworkImage(
+                              imageUrl:
+                                  'https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?q=80&w=1920&auto=format&fit=crop',
                               fit: BoxFit.cover,
                               width: double.infinity,
                               height: double.infinity,
-                              loadingBuilder:
-                                  (context, child, loadingProgress) {
-                                if (loadingProgress == null) return child;
-                                return Container(
-                                  color: Colors.black,
-                                  child: Center(
-                                    child: CircularProgressIndicator(
-                                      value:
-                                          loadingProgress.expectedTotalBytes !=
-                                                  null
-                                              ? loadingProgress
-                                                      .cumulativeBytesLoaded /
-                                                  loadingProgress
-                                                      .expectedTotalBytes!
-                                              : null,
-                                      valueColor:
-                                          const AlwaysStoppedAnimation<Color>(
-                                              Colors.white),
-                                    ),
+                              memCacheWidth: 1080,
+                              maxWidthDiskCache: 1080,
+                              placeholder: (context, url) => Container(
+                                color: Colors.black,
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: Colors.black,
+                                child: Center(
+                                  child: Icon(
+                                    Icons.error_outline,
+                                    color: Theme.of(context).colorScheme.error,
+                                    size: 48,
                                   ),
-                                );
-                              },
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.black,
-                                  child: Center(
-                                    child: Icon(
-                                      Icons.error_outline,
-                                      color:
-                                          Theme.of(context).colorScheme.error,
-                                      size: 48,
-                                    ),
-                                  ),
-                                );
-                              },
+                                ),
+                              ),
                             ),
                     ),
                     // 渐变遮罩

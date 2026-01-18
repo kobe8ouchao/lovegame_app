@@ -607,8 +607,8 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                 radius: 20,
                 backgroundColor: Colors.grey[800],
                 child: ClipOval(
-                  child: Image.network(
-                    urlHeadshotImage.isNotEmpty
+                  child: CachedNetworkImage(
+                    imageUrl: urlHeadshotImage.isNotEmpty
                         ? urlHeadshotImage.startsWith('http')
                             ? urlHeadshotImage
                             : 'https://www.atptour.com$urlHeadshotImage'
@@ -618,21 +618,19 @@ class _PlayerRankingsPageState extends State<PlayerRankingsPage> {
                     width: 40,
                     height: 40,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
+                    memCacheWidth: 120,
+                    maxWidthDiskCache: 120,
+                    errorWidget: (context, url, error) {
                       return Icon(
                         Icons.person,
                         color: Colors.white.withOpacity(0.7),
                         size: 24,
                       );
                     },
-                    loadingBuilder: (context, child, loadingProgress) {
-                      if (loadingProgress == null) return child;
+                    progressIndicatorBuilder: (context, url, downloadProgress) {
                       return Center(
                         child: CircularProgressIndicator(
-                          value: loadingProgress.expectedTotalBytes != null
-                              ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
-                              : null,
+                          value: downloadProgress.progress,
                           strokeWidth: 2,
                           color: Colors.white.withOpacity(0.5),
                         ),

@@ -1,5 +1,6 @@
 import 'package:LoveGame/pages/player_details_page.dart';
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:math' as math;
@@ -322,11 +323,13 @@ class TennisScoreCard extends StatelessWidget {
                                         borderRadius: BorderRadius.circular(14),
                                         child: player1ImageUrl != null &&
                                                 player1ImageUrl!.isNotEmpty
-                                            ? Image.network(
-                                                player1ImageUrl!,
+                                            ? CachedNetworkImage(
+                                                imageUrl: player1ImageUrl!,
                                                 fit: BoxFit.cover,
-                                                errorBuilder: (context, error,
-                                                    stackTrace) {
+                                                memCacheWidth: 120,
+                                                maxWidthDiskCache: 120,
+                                                errorWidget:
+                                                    (context, url, error) {
                                                   return Container(
                                                     color: Colors.grey.shade800,
                                                     child: const Icon(
@@ -557,10 +560,12 @@ class TennisScoreCard extends StatelessWidget {
                                               BorderRadius.circular(14),
                                           child: player2ImageUrl != null &&
                                                   player2ImageUrl!.isNotEmpty
-                                              ? Image.network(
-                                                  player2ImageUrl!,
+                                              ? CachedNetworkImage(
+                                                  imageUrl: player2ImageUrl!,
                                                   fit: BoxFit.cover,
-                                                  errorBuilder: (context, error,
+                                                  memCacheWidth: 120,
+                                                  maxWidthDiskCache: 120,
+                                                  errorWidget: (context, error,
                                                       stackTrace) {
                                                     return Container(
                                                       color:

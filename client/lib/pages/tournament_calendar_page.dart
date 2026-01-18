@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:intl/intl.dart';
 import '../services/tournament_service.dart';
 
 class TournamentCalendarPage extends StatefulWidget {
@@ -35,6 +37,13 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
   final Color _primaryColor = const Color(0xFF94E831); // Primary green color
   final Color _secondaryColor = Colors.black; // Black background
   final Color _accentColor = const Color(0xFFF67F21); // Orange accent color
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -48,8 +57,114 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     _years = List.generate(5, (index) => currentYear - 2 + index);
   }
 
-
   // Test CORS issues
+
+  List<dynamic> _filterDataByMonth(List<dynamic> data, DateTime targetMonth) {
+    return data.where((item) {
+      if (item['DisplayDate'] != null) {
+        try {
+          final String displayDate = item['DisplayDate'];
+          final DateFormat formatter = DateFormat('MMMM, yyyy', 'en_US');
+          final String targetMonthStr = formatter.format(targetMonth);
+          return displayDate == targetMonthStr;
+        } catch (e) {
+          debugPrint('Error parsing date: $e');
+          return false;
+        }
+      }
+      return item['month'] == targetMonth.month &&
+          (item['year'] == targetMonth.year || item['year'] == null);
+    }).toList();
+  }
+
+  // Scroll to tournament corresponding to current date
+  void _scrollToCurrentDate() {
+    if (!mounted) return;
+
+    final now = DateTime.now();
+    // Only scroll if we are viewing the current month
+    if (_currentMonth.year != now.year || _currentMonth.month != now.month) {
+      if (_scrollController.hasClients) {
+        _scrollController.jumpTo(0);
+      }
+      return;
+    }
+
+    int targetIndex = -1;
+    for (int i = 0; i < _tournaments.length; i++) {
+      final t = _tournaments[i];
+      DateTime? endDate = t['endDateFull'];
+
+      // If endDateFull is null, try to construct from endDay if valid
+      if (endDate == null && t['endDay'] != null && t['endDay'] is int) {
+        endDate =
+            DateTime(_currentMonth.year, _currentMonth.month, t['endDay']);
+      }
+
+      if (endDate != null) {
+        // Reset time to end of day for comparison? Or start of day?
+        // endDate usually comes from JSON "yyyy-MM-dd" parsed to DateTime (00:00:00).
+        // If tournament ends on Jan 18, and today is Jan 18.
+        // endDate (Jan 18 00:00) is NOT after today (Jan 18 10:00).
+        // So we should compare dates only.
+        final end = DateTime(endDate.year, endDate.month, endDate.day);
+        final today = DateTime(now.year, now.month, now.day);
+
+        // If tournament ends today or in future, it's a candidate.
+        if (!end.isBefore(today)) {
+          targetIndex = i;
+          break;
+        }
+      }
+    }
+
+    if (targetIndex != -1 && _scrollController.hasClients) {
+      // Estimate offset: 256.0 per item (Card height + margin) + 8.0 padding
+      // Card content height is 240, margin bottom 16.
+      final double offset = 8.0 + targetIndex * 256.0;
+
+      // Ensure we don't scroll past max extent
+      final double maxScroll = _scrollController.position.maxScrollExtent;
+      final double targetOffset = offset > maxScroll ? maxScroll : offset;
+
+      _scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeInOut,
+      );
+    }
+  }
+
+  void _finalizeTournaments() {
+    // Filter tournaments
+    _tournaments = _tournaments
+        .where((tournament) =>
+            tournament['startDateFull'] != null ||
+            tournament['endDateFull'] != null)
+        .toList();
+
+    // Sort by start date
+    _tournaments.sort((a, b) {
+      final aStartDate = a['startDateFull'] as DateTime? ??
+          (a['startDay'] != null
+              ? DateTime(_currentMonth.year, _currentMonth.month, a['startDay'])
+              : DateTime(_currentMonth.year, _currentMonth.month, 1));
+
+      final bStartDate = b['startDateFull'] as DateTime? ??
+          (b['startDay'] != null
+              ? DateTime(_currentMonth.year, _currentMonth.month, b['startDay'])
+              : DateTime(_currentMonth.year, _currentMonth.month, 1));
+
+      return aStartDate.compareTo(bStartDate);
+    });
+
+    _isLoading = false;
+
+    // Scroll to current date
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToCurrentDate();
+    });
+  }
 
   // Keep original method unchanged
   void _updateCalendarData() {
@@ -71,8 +186,8 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
 
       // 根据当前选择的类型加载不同的数据
       final String assetPath = _currentTourType == 'ATP'
-          ? 'assets/2025_atp_tournament.json'
-          : 'assets/2025_wta_tournament.json';
+          ? 'assets/2026_atp_tournament.json'
+          : 'assets/2026_wta_tournament.json';
 
       final String jsonString = await rootBundle.loadString(assetPath);
       final Map<String, dynamic> data = json.decode(jsonString);
@@ -83,11 +198,8 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
           _tournamentDates = data['TournamentDates'] ?? [];
           _tournaments = [];
 
-          final currentMonthData = _tournamentDates
-              .where((item) =>
-                  item['month'] == _currentMonth.month &&
-                  (item['year'] == _currentMonth.year || item['year'] == null))
-              .toList();
+          final currentMonthData =
+              _filterDataByMonth(_tournamentDates, _currentMonth);
 
           // Process tournaments in current month
           for (var monthData in currentMonthData) {
@@ -190,7 +302,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
           // Process cross-month tournaments - Check if tournaments from previous and next month extend into current month
           _processCrossMonthTournaments();
 
-          _isLoading = false;
+          _finalizeTournaments();
         });
       } else {
         // 处理WTA数据格式
@@ -288,7 +400,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
               _tournaments.add(processedTournament);
             }
           }
-          _isLoading = false;
+          _finalizeTournaments();
         });
       }
     } catch (e) {
@@ -332,11 +444,8 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     }
 
     // Find data for previous month
-    final prevMonthData = _tournamentDates
-        .where((item) =>
-            item['month'] == prevMonth &&
-            (item['year'] == prevYear || item['year'] == null))
-        .toList();
+    final prevMonthDate = DateTime(prevYear, prevMonth);
+    final prevMonthData = _filterDataByMonth(_tournamentDates, prevMonthDate);
 
     // Process tournaments that start in previous month and end in current month
     for (var monthData in prevMonthData) {
@@ -411,11 +520,8 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
     }
 
     // Find data for next month, process tournaments that start in current month and end in next month
-    final nextMonthData = _tournamentDates
-        .where((item) =>
-            item['month'] == nextMonth &&
-            (item['year'] == nextYear || item['year'] == null))
-        .toList();
+    final nextMonthDate = DateTime(nextYear, nextMonth);
+    final nextMonthData = _filterDataByMonth(_tournamentDates, nextMonthDate);
 
     // Check if any tournaments in current month extend into next month
     for (var tournament in List.from(_tournaments)) {
@@ -481,33 +587,11 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
 
   // Tournament list view
   Widget _buildPlayListView() {
-    // Filter tournaments for current month
-    final monthlyTournaments = _tournaments
-        .where((tournament) =>
-            tournament['startDateFull'] != null ||
-            tournament['endDateFull'] != null)
-        .toList();
-
-    // Sort by start date
-    monthlyTournaments.sort((a, b) {
-      final aStartDate = a['startDateFull'] as DateTime? ??
-          (a['startDay'] != null
-              ? DateTime(_currentMonth.year, _currentMonth.month, a['startDay'])
-              : DateTime(_currentMonth.year, _currentMonth.month, 1));
-
-      final bStartDate = b['startDateFull'] as DateTime? ??
-          (b['startDay'] != null
-              ? DateTime(_currentMonth.year, _currentMonth.month, b['startDay'])
-              : DateTime(_currentMonth.year, _currentMonth.month, 1));
-
-      return aStartDate.compareTo(bStartDate);
-    });
-
     return Column(
       children: [
         _buildHeader(),
         Expanded(
-          child: monthlyTournaments.isEmpty
+          child: _tournaments.isEmpty
               ? Center(
                   child: Text(
                     'No tournaments this month',
@@ -518,11 +602,12 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                   ),
                 )
               : ListView.builder(
+                  controller: _scrollController,
                   padding: const EdgeInsets.symmetric(
                       horizontal: 16.0, vertical: 8.0),
-                  itemCount: monthlyTournaments.length,
+                  itemCount: _tournaments.length,
                   itemBuilder: (context, index) {
-                    final tournament = monthlyTournaments[index];
+                    final tournament = _tournaments[index];
                     return _buildTournamentCard(tournament);
                   },
                 ),
@@ -752,7 +837,8 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
           children: [
             // Background image with ClipRRect for proper rounded corners
             ClipRRect(
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(12)),
               child: Stack(
                 children: [
                   // 黑色背景
@@ -763,21 +849,18 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                   ),
                   // 渐进式加载图片
                   Positioned.fill(
-                    child: Image.network(
-                      tournamentImage,
+                    child: CachedNetworkImage(
+                      imageUrl: tournamentImage,
                       fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-
+                      memCacheWidth: 1080,
+                      maxWidthDiskCache: 1080,
+                      progressIndicatorBuilder:
+                          (context, url, downloadProgress) {
                         return Stack(
                           children: [
                             // 模糊的预览（随着加载进度逐渐变清晰）
                             Opacity(
-                              opacity:
-                                  loadingProgress.expectedTotalBytes != null
-                                      ? (loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!)
-                                      : 0.3,
+                              opacity: downloadProgress.progress ?? 0.3,
                               child: Container(
                                 color: const Color.fromARGB(255, 30, 30, 30),
                               ),
@@ -788,18 +871,13 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   CircularProgressIndicator(
-                                    value: loadingProgress.expectedTotalBytes !=
-                                            null
-                                        ? loadingProgress
-                                                .cumulativeBytesLoaded /
-                                            loadingProgress.expectedTotalBytes!
-                                        : null,
+                                    value: downloadProgress.progress,
                                     valueColor: AlwaysStoppedAnimation<Color>(
                                         _primaryColor),
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    '${((loadingProgress.expectedTotalBytes != null ? loadingProgress.cumulativeBytesLoaded / loadingProgress.expectedTotalBytes! : 0) * 100).toStringAsFixed(0)}%',
+                                    '${((downloadProgress.progress ?? 0) * 100).toStringAsFixed(0)}%',
                                     style: const TextStyle(
                                       color: Colors.white,
                                       fontSize: 12,
@@ -811,7 +889,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                           ],
                         );
                       },
-                      errorBuilder: (context, error, stackTrace) {
+                      errorWidget: (context, url, error) {
                         return Container(
                           color: const Color(0xFF0C0D0C),
                           child: Center(
@@ -833,7 +911,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                         colors: [
-                          Colors.black.withOpacity(0.2),
+                          Colors.black.withOpacity(0.1),
                           Colors.black.withOpacity(0.5),
                           Colors.black.withOpacity(0.85),
                         ],
@@ -933,8 +1011,8 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
 
                           // Separator
                           const Padding(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 8), // 减小间距
+                            padding:
+                                EdgeInsets.symmetric(horizontal: 8), // 减小间距
                             child: Text(
                               '•',
                               style: TextStyle(
@@ -1811,14 +1889,15 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
         // 使用网络图片替换颜色方块
         ClipRRect(
           borderRadius: BorderRadius.circular(2),
-          child: Image.network(
-            imageUrl,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
             width: 12,
             height: 12,
             fit: BoxFit.cover,
+            memCacheWidth: 36,
+            maxWidthDiskCache: 36,
             // 添加加载占位符
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
+            progressIndicatorBuilder: (context, url, downloadProgress) {
               return Container(
                 width: 12,
                 height: 12,
@@ -1826,7 +1905,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
               );
             },
             // 添加错误处理
-            errorBuilder: (context, error, stackTrace) {
+            errorWidget: (context, url, error) {
               return Container(
                 width: 12,
                 height: 12,
@@ -1880,14 +1959,15 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(2),
-      child: Image.network(
-        imageUrl,
+      child: CachedNetworkImage(
+        imageUrl: imageUrl,
         width: 12,
         height: 12,
         fit: BoxFit.cover,
+        memCacheWidth: 36,
+        maxWidthDiskCache: 36,
         // 添加加载占位符
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
+        progressIndicatorBuilder: (context, url, downloadProgress) {
           return Container(
             width: 12,
             height: 12,
@@ -1895,7 +1975,7 @@ class _TournamentCalendarPageState extends State<TournamentCalendarPage>
           );
         },
         // 添加错误处理
-        errorBuilder: (context, error, stackTrace) {
+        errorWidget: (context, url, error) {
           return Container(
             width: 12,
             height: 12,

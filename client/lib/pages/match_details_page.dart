@@ -93,7 +93,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
         });
       } else {
         if (widget.gs == 'usopen') {
-          final year = widget.year ?? '2025';
+          final year = widget.year ?? DateTime.now().year.toString();
           final matchId = widget.matchId ?? '';
           final url =
               'https://www.usopen.org/en_US/scores/feeds/$year/matches/complete/$matchId.json';
@@ -154,7 +154,7 @@ class _MatchDetailsPageState extends State<MatchDetailsPage>
             });
           }
         } else {
-          final year = widget.year ?? '2025';
+          final year = widget.year ?? DateTime.now().year.toString();
           final tournamentId = widget.tournamentId ?? '1536';
           final matchId = widget.matchId ?? 'ms011';
 

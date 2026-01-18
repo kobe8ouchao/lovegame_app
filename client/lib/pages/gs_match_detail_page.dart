@@ -71,7 +71,7 @@ class _GSMatchDetailsPageState extends State<GSMatchDetailsPage>
     debugPrint(
         'widget.matchId: ${widget.matchId}, widget.tournamentId: ${widget.tournamentId}, widget.year: ${widget.year}');
     try {
-      final year = widget.year ?? '2025';
+      final year = widget.year ?? DateTime.now().year.toString();
       final matchId = widget.matchId ?? '';
       final url =
           'https://www.usopen.org/en_US/scores/feeds/$year/matches/complete/$matchId.json';

@@ -5,7 +5,7 @@
  * @version: 1.0
  * @Date: 2025-04-21 17:22:17
  * @LastEditors: ouchao
- * @LastEditTime: 2025-09-12 14:35:30
+ * @LastEditTime: 2026-01-18 15:30:59
  */
 import 'package:LoveGame/utils/timezone_mapping.dart';
 import 'package:html/parser.dart';
@@ -110,7 +110,7 @@ class ApiService {
       }
 
       String matchUrl =
-          'https://www.wtatennis.com/tournaments/$tournament/$city/2025/scores/$matchId';
+          'https://www.wtatennis.com/tournaments/$tournament/$city/${DateTime.now().year}/scores/$matchId';
       final Uri uri = _buildUri(matchUrl, 'wta');
       final response = await HttpService.get(uri);
       var htmlContent = "";
@@ -509,7 +509,7 @@ class ApiService {
   static Future<Map<String, dynamic>> loadLocalTournamentData() async {
     try {
       final String jsonString =
-          await rootBundle.loadString('assets/2025_atp_tournament.json');
+          await rootBundle.loadString('assets/2026_atp_tournament.json');
       return json.decode(jsonString);
     } catch (e) {
       print('Failed to load local tournament data: $e');
@@ -1153,7 +1153,7 @@ class ApiService {
 
     try {
       final String apiUrl =
-          'https://www.atptour.com/en/-/www/LiveMatches/2025/$tournamentId';
+          'https://www.atptour.com/en/-/www/LiveMatches/${DateTime.now().year}/$tournamentId';
 
       headlessWebView = HeadlessInAppWebView(
         initialUrlRequest: URLRequest(url: WebUri(apiUrl)),
@@ -1310,7 +1310,8 @@ class ApiService {
     debugPrint('实时比赛备用方案获取数据: $tournamentId');
 
     try {
-      final String endpoint = '/en/-/www/LiveMatches/2025/$tournamentId';
+      final String endpoint =
+          '/en/-/www/LiveMatches/${DateTime.now().year}/$tournamentId';
       final Uri uri = _buildUri(endpoint, '');
 
       final response = await _makeHttpRequest(
@@ -1453,7 +1454,7 @@ class ApiService {
               'matchId': match['MatchId'] ?? '',
               'tournamentId': tournamentId,
               'LastUpdated': lastUpdated,
-              'year': '2025',
+              'year': DateTime.now().year.toString(),
             };
             debugPrint('api获取直播比赛数据 $matchData $tournamentId');
             matches.add(matchData);

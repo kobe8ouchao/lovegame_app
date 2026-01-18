@@ -5,7 +5,7 @@
  * @version: 1.0
  * @Date: 2025-04-15 14:20:32
  * @LastEditors: ouchao
- * @LastEditTime: 2025-05-21 17:31:02
+ * @LastEditTime: 2026-01-17 15:22:57
  */
 import 'package:LoveGame/pages/splash_screen.dart';
 import 'package:LoveGame/utils/constants.dart';
@@ -22,14 +22,14 @@ import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
 void main() {
   // 初始化SSL配置
   SSLConfig.configureSSL();
-  
+
   // 设置全局状态栏样式
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
   ));
-  
+
   runApp(const MyApp());
 }
 
@@ -99,82 +99,91 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
                     ),
                   ],
                 ),
-                child: LiquidGlass(
-                  settings: LiquidGlassSettings(
-                    thickness: 15,
-                    blur: 8,
-                    refractiveIndex: 1.2,
-                    lightIntensity: 0.7,
-                    saturation: 1.1,
-                    lightAngle: 0.5 * math.pi,
-                    glassColor: Colors.white.withOpacity(0.1),
-                  ),
-                  shape: LiquidRoundedSuperellipse(
-                    borderRadius: Radius.circular(20),
-                  ),
-                  child: BottomNavigationBar(
-                    items: <BottomNavigationBarItem>[
-                      BottomNavigationBarItem(
-                        icon: SvgPicture.asset(
-                          'assets/svg/tab_icon_tennis.svg',
-                          width: 22,
-                          height: 22,
-                          colorFilter: const ColorFilter.mode(
-                              Colors.grey, BlendMode.srcIn),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: LiquidGlassLayer(
+                        settings: LiquidGlassSettings(
+                          thickness: 15,
+                          blur: 8,
+                          refractiveIndex: 1.2,
+                          lightIntensity: 0.7,
+                          saturation: 1.1,
+                          lightAngle: 0.5 * math.pi,
+                          glassColor: Colors.white.withOpacity(0.1),
                         ),
-                        label: 'Matches',
-                        activeIcon: SvgPicture.asset(
-                          'assets/svg/tab_icon_tennis.svg',
-                          width: 22,
-                          height: 22,
-                          colorFilter:
-                              ColorFilter.mode(primaryColor, BlendMode.srcIn),
+                        child: LiquidGlass(
+                          shape: LiquidRoundedSuperellipse(
+                            borderRadius: 20,
+                          ),
+                          child: Container(),
                         ),
                       ),
-                      BottomNavigationBarItem(
-                        icon: SvgPicture.asset(
-                          'assets/svg/tab_icon_calender.svg',
-                          width: 22,
-                          height: 22,
-                          colorFilter: const ColorFilter.mode(
-                              Colors.grey, BlendMode.srcIn),
-                        ),
-                        label: 'Tournnament',
-                        activeIcon: SvgPicture.asset(
-                          'assets/svg/tab_icon_calender.svg',
-                          width: 22,
-                          height: 22,
-                          colorFilter:
-                              ColorFilter.mode(primaryColor, BlendMode.srcIn),
-                        ),
-                      ),
-                      const BottomNavigationBarItem(
-                        icon: Icon(Icons.leaderboard),
-                        label: 'Rankings',
-                        activeIcon: Icon(Icons.leaderboard),
-                      ),
-                    ],
-                    currentIndex: _selectedIndex,
-                    selectedItemColor: primaryColor,
-                    unselectedItemColor: Colors.grey,
-                    backgroundColor: Colors.transparent,
-                    elevation: 0,
-                    showSelectedLabels: true,
-                    showUnselectedLabels: true,
-                    type: BottomNavigationBarType.fixed,
-                    selectedLabelStyle: const TextStyle(
-                      fontSize: 12.0,
-                      fontWeight: FontWeight.w500,
-                      fontFamily: 'Roboto',
                     ),
-                    unselectedLabelStyle: const TextStyle(
-                      fontSize: 11.0,
-                      fontWeight: FontWeight.normal,
-                      fontFamily: 'Roboto',
+                    BottomNavigationBar(
+                      items: <BottomNavigationBarItem>[
+                        BottomNavigationBarItem(
+                          icon: SvgPicture.asset(
+                            'assets/svg/tab_icon_tennis.svg',
+                            width: 22,
+                            height: 22,
+                            colorFilter: const ColorFilter.mode(
+                                Colors.grey, BlendMode.srcIn),
+                          ),
+                          label: 'Matches',
+                          activeIcon: SvgPicture.asset(
+                            'assets/svg/tab_icon_tennis.svg',
+                            width: 22,
+                            height: 22,
+                            colorFilter:
+                                ColorFilter.mode(primaryColor, BlendMode.srcIn),
+                          ),
+                        ),
+                        BottomNavigationBarItem(
+                          icon: SvgPicture.asset(
+                            'assets/svg/tab_icon_calender.svg',
+                            width: 22,
+                            height: 22,
+                            colorFilter: const ColorFilter.mode(
+                                Colors.grey, BlendMode.srcIn),
+                          ),
+                          label: 'Tournnament',
+                          activeIcon: SvgPicture.asset(
+                            'assets/svg/tab_icon_calender.svg',
+                            width: 22,
+                            height: 22,
+                            colorFilter:
+                                ColorFilter.mode(primaryColor, BlendMode.srcIn),
+                          ),
+                        ),
+                        const BottomNavigationBarItem(
+                          icon: Icon(Icons.leaderboard),
+                          label: 'Rankings',
+                          activeIcon: Icon(Icons.leaderboard),
+                        ),
+                      ],
+                      currentIndex: _selectedIndex,
+                      selectedItemColor: primaryColor,
+                      unselectedItemColor: Colors.grey,
+                      backgroundColor: Colors.transparent,
+                      elevation: 0,
+                      showSelectedLabels: true,
+                      showUnselectedLabels: true,
+                      type: BottomNavigationBarType.fixed,
+                      selectedLabelStyle: const TextStyle(
+                        fontSize: 12.0,
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'Roboto',
+                      ),
+                      unselectedLabelStyle: const TextStyle(
+                        fontSize: 11.0,
+                        fontWeight: FontWeight.normal,
+                        fontFamily: 'Roboto',
+                      ),
+                      iconSize: 22.0,
+                      onTap: _onItemTapped,
                     ),
-                    iconSize: 22.0,
-                    onTap: _onItemTapped,
-                  ),
+                  ],
                 ))));
   }
 }

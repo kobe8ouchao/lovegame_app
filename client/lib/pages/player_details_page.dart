@@ -2,6 +2,7 @@ import 'package:LoveGame/services/api_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../utils/svg_helper.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -379,21 +380,26 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
             child: Opacity(
               opacity: 0.85, // 稍微调整透明度
               child: widget.type == 'wta'
-                  ? Image.network(
-                      _headshot,
-                      fit: BoxFit.contain, // 使用cover而不是contain，确保填充整个区域
-                      alignment: Alignment.center, // 改为顶部对齐，确保显示上半身
-                      errorBuilder: (context, error, stackTrace) {
+                  ? CachedNetworkImage(
+                      imageUrl: _headshot,
+                      fit: BoxFit.contain,
+                      alignment: Alignment.center,
+                      memCacheWidth: 600,
+                      maxWidthDiskCache: 600,
+                      errorWidget: (context, url, error) {
                         return Container(
                           color: Colors.transparent,
                         );
                       },
                     )
-                  : Image.network(
-                      'https://www.atptour.com/-/media/alias/player-gladiator-headshot/${widget.playerId}',
-                      fit: BoxFit.cover, // 使用cover而不是contain，确保填充整个区域
-                      alignment: Alignment.topRight, // 改为顶部对齐，确保显示上半身
-                      errorBuilder: (context, error, stackTrace) {
+                  : CachedNetworkImage(
+                      imageUrl:
+                          'https://www.atptour.com/-/media/alias/player-gladiator-headshot/${widget.playerId}',
+                      fit: BoxFit.cover,
+                      alignment: Alignment.topRight,
+                      memCacheWidth: 600,
+                      maxWidthDiskCache: 600,
+                      errorWidget: (context, url, error) {
                         return Container(
                           color: Colors.transparent,
                         );
@@ -629,9 +635,9 @@ class _PlayerDetailsPageState extends State<PlayerDetailsPage> {
                         color: const Color(0xFF94E831),
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Text(
-                        '2025',
-                        style: TextStyle(
+                      child: Text(
+                        '${DateTime.now().year}',
+                        style: const TextStyle(
                           color: Colors.black,
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
